@@ -5,9 +5,11 @@ import {
   ALL_LOCATIONS,
   aggregate,
   buildTree,
+  cardMatches,
   combineLocations,
   copies,
   DEFAULT_FILTERS,
+  formatPercent,
   valueOf,
   visibleSets,
 } from '../src/core/collection';
@@ -199,6 +201,26 @@ describe('aggregation', () => {
   });
 });
 
+describe('display helpers', () => {
+  it('never shows an incomplete set as 100% or a started one as 0%', () => {
+    expect(formatPercent(1450, 1452)).toBe('99.8%');
+    expect(formatPercent(1445, 1452)).toBe('99.5%');
+    expect(formatPercent(4435, 4436)).toBe('>99.9%');
+    expect(formatPercent(1452, 1452)).toBe('100%');
+    expect(formatPercent(1, 1452)).toBe('<0.1%');
+    expect(formatPercent(0, 1452)).toBe('0%');
+    expect(formatPercent(499, 1452)).toBe('34%');
+    expect(formatPercent(7, 80)).toBe('8.8%');
+  });
+
+  it('finds cards by binder number with or without leading zeros', () => {
+    const kingstar = card('tetramon', 0, 19 * 12);
+    expect(kingstar.num).toBe(20);
+    for (const q of ['20', '#20', '020', '#020', 'kings']) expect(cardMatches(kingstar, { ...DEFAULT_FILTERS, search: q })).toBe(true);
+    expect(cardMatches(kingstar, { ...DEFAULT_FILTERS, search: '2' })).toBe(false);
+  });
+});
+
 describe('value', () => {
   const pigni = card('tetramon', 0, 0);
 
@@ -232,6 +254,16 @@ describe('value', () => {
 });
 
 describe('snapshots', () => {
+  it('reports card changes in the modded-grade column', () => {
+    const s1 = emptySave();
+    const s2 = emptySave();
+    s2.m_GradedCardInventoryList = [compact(0, 0, 380009117, { gradedCardIndex: 1 })];
+    const a = makeSnapshot(parseSave(s1), { name: 'a.json', lastModified: 1 }, 1);
+    const b = makeSnapshot(parseSave(s2), { name: 'b.json', lastModified: 2 }, 2);
+    const d = diffSnapshots(a, b, all, [COL_OTHER, 'graded'], ['tetramon']);
+    expect(d.cards.map((c) => [c.col, c.from, c.to])).toEqual([[COL_OTHER, 0, 1]]);
+  });
+
   it('round-trips sparse counts', () => {
     const a = new Int32Array(CATALOG.cards.length * COLS);
     a[5] = 2;

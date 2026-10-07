@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'preact/hooks';
+import { useMemo } from 'preact/hooks';
 import { CATALOG, type SetDef } from '../core/catalog';
 import {
   aggregate,
@@ -21,6 +21,8 @@ export interface CellTarget {
   group?: string;
   foil?: boolean;
   col: Column;
+  /** Overview filters in effect when the cell was clicked. */
+  filters?: Filters;
 }
 
 interface Props {
@@ -29,6 +31,9 @@ interface Props {
   sets: SetDef[];
   filters: Filters;
   showCopies: boolean;
+  /** Expanded row ids, owned by the parent so they survive tab switches. */
+  open: ReadonlySet<string>;
+  onToggle: (id: string) => void;
   onCell: (t: CellTarget) => void;
 }
 
@@ -89,18 +94,10 @@ export function Tiles({ save, totals, sets }: { save: ParsedSave; totals: Int32A
   );
 }
 
-export function ProgressGrid({ save, totals, sets, filters, showCopies, onCell }: Props) {
-  const [open, setOpen] = useState<Set<string>>(new Set());
+export function ProgressGrid({ save, totals, sets, filters, showCopies, open, onToggle, onCell }: Props) {
   const tree = useMemo(() => buildTree(sets, filters), [sets, filters]);
   const hasOther = save.moddedGradeCount > 0;
   const cols: Column[] = [...GRADE_COLUMNS, ...(hasOther ? [COL_OTHER] : []), 'graded', 'any'];
-
-  const toggle = (id: string) => {
-    const next = new Set(open);
-    if (next.has(id)) next.delete(id);
-    else next.add(id);
-    setOpen(next);
-  };
 
   const rows: TreeRow[] = [];
   const walk = (r: TreeRow) => {
@@ -137,7 +134,7 @@ export function ProgressGrid({ save, totals, sets, filters, showCopies, onCell }
                       class="setname"
                       disabled={!expandable}
                       aria-expanded={expandable ? expanded : undefined}
-                      onClick={() => expandable && toggle(r.id)}
+                      onClick={() => expandable && onToggle(r.id)}
                     >
                       <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true" style={{ visibility: expandable ? 'visible' : 'hidden' }}>
                         <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round" />

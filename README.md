@@ -1,10 +1,15 @@
 # TCG Card Tracker
 
-A collection tracker for **TCG Card Shop Simulator**. Load your save file and see, for every set,
-how many different cards you own **ungraded and at each grade from 1 to 10**, all in one table.
-Open any set to see each edition and foil vs non-foil.
+A collection tracker for **TCG Card Shop Simulator**. For every set it shows how many different
+cards you own **ungraded and at each grade from 1 to 10**, all in one table. Open any set to see
+each edition and foil vs non-foil.
 
-The app runs entirely in your browser. Your save file is never uploaded.
+There are two ways to use it:
+
+- **Web app** (`web/`): drop in your save file. It runs entirely in your browser, and your save is
+  never uploaded. It also has the missing-card checklist, collection value and a timeline.
+- **In-game mod** (`mod/`): a BepInEx plugin. Press F7 in your shop to see the same grid live.
+  See [mod/README.md](mod/README.md).
 
 ## Features
 
@@ -65,10 +70,13 @@ The code layout:
 - `web/src/ui/`: Preact components
 - `docs/SAVE_FORMAT.md`: everything we know about the save file's card data
 
-## Roadmap
+## Notes
 
-- An in-game BepInEx mod that shows the same grid live, without exporting saves.
-- Confirm the monster ordering against more real saves. If cards ever show up under the
-  wrong monster, the ordering lives in `SHOWN_MAIN` / `SHOWN_GHOST` in `catalog.ts`.
+- The web app assumes the game's monster order is the standard card number order, as every
+  community tool does. The mod reads the real order from the game. If the web app ever shows
+  a card under the wrong monster, the order lives in `SHOWN_MAIN` / `SHOWN_GHOST` in
+  `web/src/core/catalog.ts`.
+- The mod is built by `.github/workflows/mod.yml`. Push a `mod-v<version>` tag to attach the zip
+  to a GitHub release.
 
 Fan-made and unofficial; not affiliated with OPNeon Games.

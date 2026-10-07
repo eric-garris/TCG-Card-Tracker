@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
+import { CATALOG_VERSION } from '../core/catalog';
 import { combineLocations, DEFAULT_FILTERS, visibleSets, type Filters } from '../core/collection';
 import { parseSaveText, SaveFormatError } from '../core/save';
 import { makeSnapshot, type Snapshot } from '../core/snapshot';
@@ -41,7 +42,16 @@ export function App() {
   const [tab, setTab] = useState<Tab>('overview');
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
   const [preset, setPreset] = useState<CellTarget | null>(null);
+  const [openRows, setOpenRows] = useState<Set<string>>(() => new Set());
+  // Tabs stay mounted once visited, so drill-downs and list settings survive switching tabs.
+  const [visited, setVisited] = useState<Set<Tab>>(() => new Set<Tab>(['overview']));
   const [dragOver, setDragOver] = useState(false);
+  const [storageWarning, setStorageWarning] = useState(false);
+
+  const showTab = (t: Tab) => {
+    setTab(t);
+    setVisited((v) => (v.has(t) ? v : new Set([...v, t])));
+  };
 
   useEffect(() => applyThemePref(theme), [theme]);
 
@@ -67,12 +77,16 @@ export function App() {
     setBusy(true);
     const errs: string[] = [];
     const loaded: { last: LastSave; snap: Snapshot }[] = [];
+    let stored = true;
     for (const file of files) {
       try {
         const save = parseSaveText(await file.text());
         const snap = makeSnapshot(save, { name: file.name, lastModified: file.lastModified }, Date.now());
-        await putSnapshot(snap);
-        loaded.push({ snap, last: { save, fileName: file.name, fileModified: file.lastModified, snapshotId: snap.id } });
+        if (!(await putSnapshot(snap))) stored = false;
+        loaded.push({
+          snap,
+          last: { save, fileName: file.name, fileModified: file.lastModified, snapshotId: snap.id, catalogVersion: CATALOG_VERSION },
+        });
       } catch (e) {
         errs.push(`${file.name}: ${e instanceof SaveFormatError ? e.message : 'could not be read.'}`);
         if (!(e instanceof SaveFormatError)) console.error(e);
@@ -85,11 +99,12 @@ export function App() {
       setLast(newest);
       void saveLastSave(newest);
       setSnapshots(await listSnapshots());
-      setTab((t) => (loaded.length > 1 && t === 'overview' ? 'timeline' : t));
+      setStorageWarning(!stored);
+      if (loaded.length > 1 && tab === 'overview') showTab('timeline');
     }
     setErrors(errs);
     setBusy(false);
-  }, []);
+  }, [tab]);
 
   // Accept a drop anywhere on the page once a save is showing.
   useEffect(() => {
@@ -160,6 +175,13 @@ export function App() {
         </div>
       )}
 
+      {storageWarning && (
+        <div class="notice warn" style={{ marginBottom: '16px' }}>
+          This browser would not store your timeline (storage is full or blocked), so it will reset when you close the
+          page.
+        </div>
+      )}
+
       {errors.length > 0 && (
         <div class="notice error stack" style={{ marginBottom: '16px' }} role="alert">
           {errors.map((e) => (
@@ -215,15 +237,22 @@ export function App() {
 
           <nav class="tabs" role="tablist">
             {TABS.map((t) => (
-              <button type="button" role="tab" aria-selected={tab === t.key} onClick={() => setTab(t.key)}>
+              <button
+                type="button"
+                role="tab"
+                id={`tab-${t.key}`}
+                aria-controls={`panel-${t.key}`}
+                aria-selected={tab === t.key}
+                onClick={() => showTab(t.key)}
+              >
                 {t.label}
                 {t.key === 'timeline' && snapshots.length > 0 ? <span class="muted"> ({snapshots.length})</span> : null}
               </button>
             ))}
           </nav>
 
-          {tab === 'overview' && (
-            <div class="stack">
+          {visited.has('overview') && (
+            <div class="stack" role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" hidden={tab !== 'overview'}>
               <Tiles save={save} totals={totals} sets={sets} />
               <FilterRow filters={filters} onChange={setFilters}>
                 <span class="spacer" />
@@ -238,16 +267,35 @@ export function App() {
                 sets={sets}
                 filters={filters}
                 showCopies={prefs.showCopies}
+                open={openRows}
+                onToggle={(id) =>
+                  setOpenRows((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  })
+                }
                 onCell={(t) => {
-                  setPreset({ ...t });
-                  setTab('missing');
+                  // The list opens with the same rarity/foil/search filters the clicked cell counted.
+                  setPreset({ ...t, filters: { ...filters, foil: t.foil ?? filters.foil } });
+                  showTab('missing');
                 }}
               />
             </div>
           )}
-          {tab === 'missing' && <Missing save={save} totals={totals} sets={sets} preset={preset} />}
-          {tab === 'value' && <ValueView save={save} totals={totals} sets={sets} included={included} />}
-          {tab === 'timeline' && (
+          {visited.has('missing') && (
+            <div role="tabpanel" id="panel-missing" aria-labelledby="tab-missing" hidden={tab !== 'missing'}>
+              <Missing save={save} totals={totals} sets={sets} preset={preset} />
+            </div>
+          )}
+          {visited.has('value') && (
+            <div role="tabpanel" id="panel-value" aria-labelledby="tab-value" hidden={tab !== 'value'}>
+              <ValueView save={save} totals={totals} sets={sets} included={included} />
+            </div>
+          )}
+          {visited.has('timeline') && (
+            <div role="tabpanel" id="panel-timeline" aria-labelledby="tab-timeline" hidden={tab !== 'timeline'}>
             <Timeline
               snapshots={snapshots}
               sets={sets}
@@ -262,8 +310,16 @@ export function App() {
                 await forgetEverything();
                 setSnapshots([]);
                 setLast(null);
+                setTab('overview');
+                setVisited(new Set<Tab>(['overview']));
+                setPreset(null);
+                setOpenRows(new Set());
+                setFilters(DEFAULT_FILTERS);
+                setErrors([]);
+                setStorageWarning(false);
               }}
             />
+            </div>
           )}
         </div>
       )}

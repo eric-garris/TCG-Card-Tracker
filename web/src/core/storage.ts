@@ -4,6 +4,7 @@
  * unavailable (private windows, blocked site data) it falls back to memory for the session.
  */
 
+import { CATALOG_VERSION } from './catalog';
 import type { ParsedSave } from './save';
 import type { Snapshot } from './snapshot';
 
@@ -16,6 +17,8 @@ export interface LastSave {
   fileName: string;
   fileModified: number;
   snapshotId: string;
+  /** Count arrays are indexed by catalog position; a different catalog makes them meaningless. */
+  catalogVersion: number;
 }
 
 let memorySnapshots: Snapshot[] = [];
@@ -43,12 +46,14 @@ function openDb(): Promise<IDBDatabase | null> {
   return dbPromise;
 }
 
+/** Resolves when the transaction commits, so quota errors raised at commit time are seen. */
 function run<T>(db: IDBDatabase, store: string, mode: IDBTransactionMode, op: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = db.transaction(store, mode);
     const req = op(t.objectStore(store));
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    t.oncomplete = () => resolve(req.result);
+    t.onabort = () => reject(t.error ?? req.error);
+    t.onerror = () => reject(t.error ?? req.error);
   });
 }
 
@@ -56,24 +61,33 @@ export async function storageAvailable(): Promise<boolean> {
   return (await openDb()) !== null;
 }
 
+/** Snapshots made with the current catalog. Ones from an older catalog can't be compared and are skipped. */
 export async function listSnapshots(): Promise<Snapshot[]> {
   const db = await openDb();
-  if (!db) return [...memorySnapshots];
-  try {
-    return await run<Snapshot[]>(db, SNAPSHOTS, 'readonly', (s) => s.getAll() as IDBRequest<Snapshot[]>);
-  } catch {
-    return [...memorySnapshots];
+  let stored: Snapshot[] = [];
+  if (db) {
+    try {
+      stored = await run<Snapshot[]>(db, SNAPSHOTS, 'readonly', (s) => s.getAll() as IDBRequest<Snapshot[]>);
+    } catch {
+      stored = [];
+    }
   }
+  // Include snapshots that only made it into memory (storage full or blocked).
+  const ids = new Set(stored.map((s) => s.id));
+  const all = [...stored, ...memorySnapshots.filter((m) => !ids.has(m.id))];
+  return all.filter((s) => s.catalogVersion === CATALOG_VERSION);
 }
 
-export async function putSnapshot(snap: Snapshot): Promise<void> {
+/** Returns false when the snapshot could only be kept in memory for this session. */
+export async function putSnapshot(snap: Snapshot): Promise<boolean> {
   memorySnapshots = [...memorySnapshots.filter((m) => m.id !== snap.id), snap];
   const db = await openDb();
-  if (!db) return;
+  if (!db) return false;
   try {
     await run(db, SNAPSHOTS, 'readwrite', (s) => s.put(snap));
+    return true;
   } catch {
-    // Quota or blocked storage: the in-memory copy still works for this session.
+    return false;
   }
 }
 
@@ -90,12 +104,15 @@ export async function deleteSnapshot(id: string): Promise<void> {
 
 export async function loadLastSave(): Promise<LastSave | null> {
   const db = await openDb();
-  if (!db) return memoryLast;
-  try {
-    return ((await run(db, STATE, 'readonly', (s) => s.get('lastSave'))) as LastSave | undefined) ?? null;
-  } catch {
-    return memoryLast;
+  let last: LastSave | null = memoryLast;
+  if (db) {
+    try {
+      last = ((await run(db, STATE, 'readonly', (s) => s.get('lastSave'))) as LastSave | undefined) ?? null;
+    } catch {
+      last = memoryLast;
+    }
   }
+  return last && last.catalogVersion === CATALOG_VERSION ? last : null;
 }
 
 export async function saveLastSave(last: LastSave): Promise<void> {

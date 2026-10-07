@@ -19,7 +19,9 @@ interface Props {
 
 const PAGE = 300;
 
-function colPriceGrade(col: Column): number {
+/** Grade whose price the list shows: the column's grade, ungraded for roll-ups, none for modded grades. */
+function colPriceGrade(col: Column): number | null {
+  if (col === COL_OTHER) return null;
   return typeof col === 'number' && col >= 0 && col <= 10 ? col : 0;
 }
 
@@ -49,7 +51,7 @@ export function Missing({ save, totals, sets, preset }: Props) {
     setGroup(preset.group ?? 'all');
     setCol(preset.col);
     setShow('missing');
-    setFilters((f) => ({ ...f, foil: preset.foil ?? null }));
+    setFilters(preset.filters ?? { tiers: new Set(TIERS), foil: preset.foil ?? null, search: '' });
     setLimit(PAGE);
   }, [preset]);
 
@@ -64,7 +66,7 @@ export function Missing({ save, totals, sets, preset }: Props) {
       const n = copies(totals, c, col);
       return show === 'all' || (show === 'missing' ? n === 0 : n > 0);
     });
-    const withPrice = list.map((card) => ({ card, price: unitPrice(save, card, priceGrade) }));
+    const withPrice = list.map((card) => ({ card, price: priceGrade === null ? null : unitPrice(save, card, priceGrade) }));
     if (sort === 'name') withPrice.sort((a, b) => a.card.name.localeCompare(b.card.name) || a.card.i - b.card.i);
     else if (sort === 'price-desc') withPrice.sort((a, b) => (b.price ?? -1) - (a.price ?? -1) || a.card.i - b.card.i);
     else if (sort === 'price-asc') withPrice.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity) || a.card.i - b.card.i);
@@ -75,7 +77,7 @@ export function Missing({ save, totals, sets, preset }: Props) {
   const pool = rows.length;
 
   const exportCsv = () => {
-    const header = ['Set', 'Number', 'Card', 'Edition', 'Foil', 'Rarity', `Copies (${columnLabel(col)})`, 'Owned as', `Market price (${priceGrade ? 'Grade ' + priceGrade : 'ungraded'})`];
+    const header = ['Set', 'Number', 'Card', 'Edition', 'Foil', 'Rarity', `Copies (${columnLabel(col)})`, 'Owned as', `Market price (${priceGrade === null ? 'n/a' : priceGrade ? 'Grade ' + priceGrade : 'ungraded'})`];
     const lines = [header, ...rows.map(({ card, price }) => [
       CATALOG.setByKey.get(card.set)?.name ?? card.set,
       String(card.num),
@@ -96,7 +98,11 @@ export function Missing({ save, totals, sets, preset }: Props) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
-  const colOptions: Column[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 'graded', 'any'];
+  const colOptions: Column[] = [
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ...(save.moddedGradeCount > 0 || col === COL_OTHER ? [COL_OTHER] : []),
+    'graded', 'any',
+  ];
 
   return (
     <div class="stack">
@@ -179,7 +185,7 @@ export function Missing({ save, totals, sets, preset }: Props) {
             <strong class="num">{int(pool)}</strong>{' '}
             {show === 'missing' ? 'missing' : show === 'owned' ? 'owned' : ''} {pool === 1 ? 'card' : 'cards'}
             <span class="muted"> · {columnLabel(col)}</span>
-            {show === 'missing' && pool > 0 && (
+            {show === 'missing' && pool > 0 && priceGrade !== null && (
               <span class="muted small">
                 {' '}
                 · market value of one of each: {formatMoney(listValue)}

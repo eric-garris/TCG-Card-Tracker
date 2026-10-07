@@ -76,7 +76,10 @@ export function cardMatches(card: CardDef, f: Filters): boolean {
   if (f.foil !== null && card.foil !== f.foil) return false;
   if (f.search) {
     const q = f.search.trim().toLowerCase();
-    if (q && !card.name.toLowerCase().includes(q) && String(card.num) !== q.replace(/^#/, '')) return false;
+    const n = q.replace(/^#/, '');
+    // Numbers match the binder number, with or without leading zeros ("7", "#007").
+    const numberMatch = /^\d+$/.test(n) && Number(n) === card.num;
+    if (q && !numberMatch && !card.name.toLowerCase().includes(q)) return false;
   }
   return true;
 }
@@ -176,10 +179,26 @@ export function percent(owned: number, total: number): number {
   return total === 0 ? 0 : (owned / total) * 100;
 }
 
+/**
+ * Percent for display. Never rounds an incomplete set up to 100% (or a non-empty one down
+ * to 0%): completionists care exactly about that last card.
+ */
+export function displayPercent(owned: number, total: number): number {
+  if (total === 0) return 0;
+  const p = percent(owned, total);
+  const digits = p >= 10 ? 0 : 1;
+  const f = 10 ** digits;
+  let r = Math.round(p * f) / f;
+  if (owned < total && r >= 100) r = Math.floor(p * 10) / 10;
+  if (owned > 0 && r <= 0) r = Math.ceil(p * 10) / 10;
+  return r;
+}
+
 export function formatPercent(owned: number, total: number): string {
   if (total === 0) return '—';
   const p = percent(owned, total);
   if (p > 0 && p < 0.1) return '<0.1%';
-  if (p < 100 && p > 99.9) return '>99.9%';
-  return `${p.toFixed(p >= 10 || p === 0 ? 0 : 1)}%`;
+  if (owned < total && p >= 99.95) return '>99.9%';
+  const r = displayPercent(owned, total);
+  return `${Number.isInteger(r) ? r : r.toFixed(1)}%`;
 }

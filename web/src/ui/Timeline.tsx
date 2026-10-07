@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'preact/hooks';
 import { CATALOG, cardLabel, type SetDef, type SetKey } from '../core/catalog';
 import { aggregate, columnLabel, percent, type Column } from '../core/collection';
-import type { LocationKey } from '../core/save';
+import { COL_OTHER, type LocationKey } from '../core/save';
 import {
   diffSnapshots,
   snapshotLabel,
@@ -36,11 +36,15 @@ interface Props {
 }
 
 const METRICS: Column[] = ['any', 0, 'graded', 10, 9, 8];
-const DIFF_COLS: Column[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 'graded', 'any'];
+const DIFF_COLS: Column[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, COL_OTHER, 'graded', 'any'];
 
 export function Timeline({ snapshots, sets, included, currentPlayer, currentId, onDelete, onForgetAll }: Props) {
   const players = useMemo(() => [...new Set(snapshots.map((s) => s.playerName ?? ''))], [snapshots]);
-  const [player, setPlayer] = useState<string>(currentPlayer ?? players[0] ?? '');
+  const [chosen, setPlayer] = useState<string | null>(null);
+  // The shop being charted: the user's pick if it still has saves, else the shop on screen, else any.
+  const current = currentPlayer ?? '';
+  const player =
+    chosen !== null && players.includes(chosen) ? chosen : players.includes(current) ? current : (players[0] ?? '');
   const [metric, setMetric] = useState<Column>('any');
   const list = useMemo(
     () => sortSnapshots(snapshots.filter((s) => (s.playerName ?? '') === player)),
@@ -64,7 +68,8 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
           color: SET_COLORS[set.key],
           values: totalsList.map((t) => {
             const a = aggregate(cards, t, metric);
-            return Math.round(percent(a.owned, a.total) * 10) / 10;
+            const r = Math.round(percent(a.owned, a.total) * 10) / 10;
+            return a.owned < a.total ? Math.min(99.9, r) : r;
           }),
         };
       }),
@@ -81,6 +86,11 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
     () => (from && to && from.id !== to.id ? diffSnapshots(from, to, included, DIFF_COLS, sets.map((s) => s.key)) : null),
     [from, to, included, sets],
   );
+
+  // The modded-grade column only appears when either save has such cards.
+  const diffCols = diff
+    ? DIFF_COLS.filter((c) => c !== COL_OTHER || diff.sets.some((x) => x.col === COL_OTHER && (x.ownedFrom > 0 || x.ownedTo > 0)))
+    : DIFF_COLS;
 
   if (snapshots.length === 0) {
     return <p class="muted">Load a save to start your timeline.</p>;
@@ -123,7 +133,9 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
 
       {list.length < 2 ? (
         <div class="notice">
-          Only one save loaded for this shop so far. Load another (newer or older) save to see change over time.
+          {list.length === 0
+            ? 'No saves stored for this shop yet.'
+            : 'Only one save loaded for this shop so far. Load another (newer or older) save to see change over time.'}
         </div>
       ) : (
         <>
@@ -181,7 +193,7 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
                   <thead>
                     <tr>
                       <th>Set</th>
-                      {DIFF_COLS.map((c) => (
+                      {diffCols.map((c) => (
                         <th class="num">{c === 0 ? 'Ungraded' : columnLabel(c, true)}</th>
                       ))}
                     </tr>
@@ -190,7 +202,7 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
                     {sets.map((set) => (
                       <tr>
                         <td>{set.name}</td>
-                        {DIFF_COLS.map((c) => {
+                        {diffCols.map((c) => {
                           const ch = diff.sets.find((x) => x.set === set.key && x.col === c)!;
                           const d = ch.ownedTo - ch.ownedFrom;
                           return (
