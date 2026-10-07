@@ -68,6 +68,8 @@ namespace TCGCardTracker
             public int Foil = -1;
             public bool HasChildren;
             public Agg[] Cells = Array.Empty<Agg>();
+            /// <summary>Cell text and tooltip, built once per data change instead of on every OnGUI event.</summary>
+            public GUIContent[] Contents = Array.Empty<GUIContent>();
         }
 
         // ---------- Lifecycle ----------
@@ -81,13 +83,17 @@ namespace TCGCardTracker
         private void Open()
         {
             _open = true;
-            _uiController = GameReader.EnterUIMode();
+            // Keep a hand-back still pending from closing while paused; otherwise take UI mode now.
+            if (_uiController == null) _uiController = GameReader.EnterUIMode();
             Refresh(full: true);
         }
 
         private void Close()
         {
             _open = false;
+            // If the game was paused while the panel was open, hand the cursor back only once it
+            // resumes (the pause menu still needs it, and the game's UI-mode reset waits on game time).
+            if (Time.timeScale == 0f) return;
             GameReader.ExitUIMode(_uiController);
             _uiController = null;
         }
@@ -106,7 +112,16 @@ namespace TCGCardTracker
         /// <summary>Called every frame: keeps binder counts current while the panel is open.</summary>
         public void Tick()
         {
-            if (!_open || Time.realtimeSinceStartup < _nextAutoRefresh) return;
+            if (!_open)
+            {
+                if (_uiController != null && Time.timeScale > 0f)
+                {
+                    GameReader.ExitUIMode(_uiController);
+                    _uiController = null;
+                }
+                return;
+            }
+            if (Time.realtimeSinceStartup < _nextAutoRefresh) return;
             Refresh(full: false);
         }
 
@@ -122,7 +137,8 @@ namespace TCGCardTracker
             }
             try
             {
-                if (full)
+                // Also build it when the panel was opened during a loading screen.
+                if (full || _catalog == null)
                 {
                     _catalog = GameReader.BuildCatalog();
                     _shelvesLive = Plugin.LiveShelves.Value && GameReader.RefreshShelfData();
@@ -210,6 +226,19 @@ namespace TCGCardTracker
                 }
             }
             _summary = $"Collected {any.Owned:N0} / {any.Total:N0} ({Pct(any.Owned, any.Total)})   ·   Graded copies {graded.Copies:N0}   ·   Gem Mint {gem.Copies:N0}   ·   Value {GameReader.PriceString(ungradedValue + gradedValue)} ({GameReader.PriceString(ungradedValue)} ungraded, {GameReader.PriceString(gradedValue)} graded)";
+            foreach (var row in rows)
+            {
+                row.Contents = new GUIContent[GridColumns.Length];
+                for (int i = 0; i < GridColumns.Length; i++)
+                {
+                    var a = row.Cells[i];
+                    string text = $"{a.Owned:N0}/{a.Total:N0}" + (Plugin.ShowCopies.Value ? $"\n{(a.Copies > 0 ? a.Copies.ToString("N0") + "x" : "")}" : "");
+                    string where = row.Depth > 0 ? row.Group + " " : "";
+                    string foil = row.Foil == 1 ? "Foil " : row.Foil == 0 ? "Non-foil " : "";
+                    string tip = $"{row.Set.Name} {where}{foil}· {GridColumns[i].LongLabel}: {a.Owned:N0} of {a.Total:N0} cards ({Pct(a.Owned, a.Total)}), {a.Copies:N0} copies";
+                    row.Contents[i] = new GUIContent(text, tip);
+                }
+            }
             _rows = rows;
             return rows;
         }
@@ -361,7 +390,11 @@ namespace TCGCardTracker
             }
             GUILayout.Space(16);
             bool copies = GUILayout.Toggle(Plugin.ShowCopies.Value, "Show copies", Styles.Chip);
-            if (copies != Plugin.ShowCopies.Value) Plugin.ShowCopies.Value = copies;
+            if (copies != Plugin.ShowCopies.Value)
+            {
+                Plugin.ShowCopies.Value = copies;
+                _rows = null;
+            }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
@@ -393,9 +426,7 @@ namespace TCGCardTracker
                 for (int i = 0; i < GridColumns.Length; i++)
                 {
                     var a = row.Cells[i];
-                    string text = $"{a.Owned:N0}/{a.Total:N0}" + (Plugin.ShowCopies.Value ? $"\n{(a.Copies > 0 ? a.Copies.ToString("N0") + "x" : "")}" : "");
-                    var tip = $"{row.Set.Name} {(row.Depth > 0 ? row.Group + " " : "")}{(row.Foil == 1 ? "Foil " : row.Foil == 0 ? "Non-foil " : "")}· {GridColumns[i].LongLabel}: {a.Owned:N0} of {a.Total:N0} cards ({Pct(a.Owned, a.Total)}), {a.Copies:N0} copies";
-                    if (GUILayout.Button(new GUIContent(text, tip), Styles.Cell(a.Owned, a.Total), GUILayout.Width(CellWidth), GUILayout.Height(RowHeight)))
+                    if (GUILayout.Button(row.Contents[i], Styles.Cell(a.Owned, a.Total), GUILayout.Width(CellWidth), GUILayout.Height(RowHeight)))
                     {
                         _selSet = row.Set;
                         _selGroup = row.Group;

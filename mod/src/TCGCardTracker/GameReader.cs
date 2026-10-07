@@ -358,10 +358,17 @@ namespace TCGCardTracker
         }
 
         /// <summary>Hands the cursor to our panel the way the game's own menus do.</summary>
+        /// <summary>
+        /// Takes the game's UI mode (cursor free, camera still) unless something else already has the
+        /// cursor. The pause menu shows the cursor without entering UI mode and freezes time; leaving
+        /// UI mode there would hide the cursor over the menu, so we never take it while paused or
+        /// while another screen has the cursor out.
+        /// </summary>
         public static InteractionPlayerController? EnterUIMode()
         {
             try
             {
+                if (Time.timeScale == 0f || Cursor.visible) return null;
                 var controller = UnityEngine.Object.FindObjectOfType<InteractionPlayerController>();
                 if (controller != null && !controller.IsInUIMode())
                 {

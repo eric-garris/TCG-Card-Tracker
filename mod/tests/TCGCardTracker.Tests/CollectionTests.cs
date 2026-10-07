@@ -85,6 +85,16 @@ namespace TCGCardTracker.Tests
         }
 
         [Fact]
+        public void VanillaOverTenGradeCountsAsTen()
+        {
+            var c = new Collection(Cat);
+            c.AddCompact(Loc.Storage, new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 14, GradedIndex = 5 });
+            var pigni = Cat.FromCompact(0, 0, false)!;
+            Assert.Equal(1, c.ByLoc[(int)Loc.Storage][pigni.Index * Collection.Cols + 10]);
+            Assert.Equal(0, c.ModdedGrades);
+        }
+
+        [Fact]
         public void AggregatesUniqueAndCopiesPerColumn()
         {
             var c = new Collection(Cat);

@@ -46,6 +46,7 @@ namespace TCGCardTracker.Core
     {
         public const int Cols = 12;
         public const int ColOther = 11;
+        private const int VanillaGradeLimit = 100000;
         public static readonly int LocCount = Enum.GetValues(typeof(Loc)).Length;
 
         public readonly Catalog Catalog;
@@ -66,6 +67,9 @@ namespace TCGCardTracker.Core
             int col;
             if (grade <= 0) col = 0;
             else if (grade <= 10) col = grade;
+            // A vanilla storage-shelf quirk adds ungraded copies onto a slab's stored grade; the game
+            // treats such cards as grade 10. Grading mods' encoded grades are far larger.
+            else if (grade < VanillaGradeLimit) col = 10;
             else
             {
                 col = ColOther;
