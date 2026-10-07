@@ -4,6 +4,7 @@ import { cardMatches, columnLabel, copies, unitPrice, type Column, type Filters 
 import { COLS, COL_OTHER, type ParsedSave } from '../core/save';
 import { formatMoney } from '../core/value';
 import { FoilSeg, TierChips } from './Controls';
+import { EMBEDDED } from './env';
 import { int } from './format';
 import type { CellTarget } from './Overview';
 
@@ -214,9 +215,11 @@ export function Missing({ save, totals, sets, preset }: Props) {
           >
             {copied === 'done' ? 'Copied' : copied === 'failed' ? 'Copy blocked' : 'Copy CSV'}
           </button>
-          <button type="button" class="btn" onClick={exportCsv} disabled={pool === 0}>
-            Download CSV
-          </button>
+          {!EMBEDDED && (
+            <button type="button" class="btn" onClick={exportCsv} disabled={pool === 0}>
+              Download CSV
+            </button>
+          )}
         </div>
         {pool === 0 ? (
           <p class="pad muted" style={{ marginTop: 0 }}>
