@@ -406,7 +406,7 @@ code,
 
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
   gap: 12px;
 }
 
@@ -500,6 +500,7 @@ table.grid thead th.setcol {
 
 .setname .chev {
   width: 14px;
+  height: 14px;
   flex: none;
   color: var(--muted);
   transition: transform 0.15s;
@@ -607,6 +608,13 @@ td.cell {
   flex-wrap: wrap;
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .legend .sw {
