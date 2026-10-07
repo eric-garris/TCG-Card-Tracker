@@ -4,6 +4,7 @@ using BepInEx.Configuration;
 using BepInEx.Logging;
 using TCGCardTracker.Core;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace TCGCardTracker
 {
@@ -47,13 +48,21 @@ namespace TCGCardTracker
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
-            // A dedicated object that survives scene loads drives input and drawing.
-            var host = new GameObject("TCGCardTracker");
-            DontDestroyOnLoad(host);
-            host.hideFlags = HideFlags.HideAndDontSave;
-            host.AddComponent<Runner>();
+            // This game destroys the BepInEx manager object and never ticks plugin Update, so input
+            // and drawing run from our own object, re-spawned on every scene load, plus a copy on a
+            // game object the game keeps alive. Nothing here may touch CSingleton<T>.Instance: on the
+            // title screen that getter creates phantom game managers.
+            Runner.Spawn();
+            SceneManager.sceneLoaded += OnSceneLoaded;
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
+        }
+
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            Runner.Window.ForceClose();
+            Runner.Spawn();
+            Runner.AttachToGameHost();
         }
 
         internal static void LogOnce(string key, string message)
@@ -69,16 +78,74 @@ namespace TCGCardTracker
         }
     }
 
+    /// <summary>
+    /// Drives the window. Several copies can be alive (our own object and one on a game object);
+    /// whichever updates first in a frame handles input and draws, so nothing runs twice.
+    /// </summary>
     internal sealed class Runner : MonoBehaviour
     {
-        private readonly TrackerWindow _window = new TrackerWindow();
+        internal static readonly TrackerWindow Window = new TrackerWindow();
+        private static Runner? _own;
+        private static Runner? _driver;
+        private static int _lastFrame = -1;
+
+        public static void Spawn()
+        {
+            if (_own != null)
+            {
+                if (!_own.gameObject.activeSelf) _own.gameObject.SetActive(true);
+                if (!_own.enabled) _own.enabled = true;
+                return;
+            }
+            var go = new GameObject("TCGCardTracker");
+            DontDestroyOnLoad(go);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            _own = go.AddComponent<Runner>();
+        }
+
+        /// <summary>Second copy on the shop's LightManager object, found without the CSingleton getter.</summary>
+        public static void AttachToGameHost()
+        {
+            try
+            {
+                var host = FindObjectOfType<LightManager>();
+                if (host == null) return;
+                var existing = host.gameObject.GetComponent<Runner>();
+                if (existing == null) host.gameObject.AddComponent<Runner>();
+                else if (!existing.enabled) existing.enabled = true;
+            }
+            catch (System.Exception e)
+            {
+                Plugin.LogOnce("host-attach", "Could not attach to a game object: " + e.Message);
+            }
+        }
 
         private void Update()
         {
-            if (Plugin.ToggleKey.Value.IsDown()) _window.Toggle();
-            _window.Tick();
+            if (Time.frameCount == _lastFrame) return;
+            _lastFrame = Time.frameCount;
+            _driver = this;
+            try
+            {
+                if (Plugin.ToggleKey.Value.IsDown()) Window.Toggle();
+                Window.Tick();
+            }
+            catch (System.Exception e)
+            {
+                Plugin.LogOnce("update", "Tracker update failed: " + e);
+            }
         }
 
-        private void OnGUI() => _window.Draw();
+        private void OnGUI()
+        {
+            if (_driver != this) return;
+            Window.Draw();
+        }
+
+        private void OnDestroy()
+        {
+            if (ReferenceEquals(_own, this)) _own = null;
+            if (ReferenceEquals(_driver, this)) _driver = null;
+        }
     }
 }

@@ -15,7 +15,7 @@ Press **F7** in your shop to open it.
 ## Install
 
 1. Install **BepInEx 5** for the game. The easiest way is r2modman or the Thunderstore Mod Manager
-   (choose "TCG Card Shop Simulator"). To do it by hand, extract BepInEx 5.4 (Windows x64) into
+   (choose "TCG Card Shop Simulator"). To do it by hand, extract BepInEx 5.4.23.5 (Windows x64) into
    the game folder, next to `Card Shop Simulator.exe`, and start the game once.
 2. Put `TCGCardTracker.dll` in `<game>\BepInEx\plugins\TCGCardTracker\`. With a mod manager, import
    the release zip instead.

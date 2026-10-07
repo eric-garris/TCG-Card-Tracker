@@ -92,6 +92,17 @@ namespace TCGCardTracker
             _uiController = null;
         }
 
+        /// <summary>On scene changes: drop state tied to the old scene without touching its objects.</summary>
+        public void ForceClose()
+        {
+            _open = false;
+            _uiController = null;
+            _catalog = null;
+            _collection = null;
+            _rows = null;
+            _list = null;
+        }
+
         /// <summary>Called every frame: keeps binder counts current while the panel is open.</summary>
         public void Tick()
         {
@@ -250,19 +261,33 @@ namespace TCGCardTracker
 
             float scale = Mathf.Clamp(Plugin.UiScale.Value, 0.75f, 2f);
             var saved = GUI.matrix;
-            GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
-            float sw = Screen.width / scale, sh = Screen.height / scale;
-            if (!_placed)
+            try
             {
-                float w = Mathf.Min(NameWidth + CellWidth * GridColumns.Length + 60f, sw - 40f);
-                float h = Mathf.Min(700f, sh - 40f);
-                _rect = new Rect((sw - w) / 2f, (sh - h) / 2f, w, h);
-                _placed = true;
+                GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
+                float sw = Screen.width / scale, sh = Screen.height / scale;
+                if (!_placed)
+                {
+                    float w = Mathf.Min(NameWidth + CellWidth * GridColumns.Length + 60f, sw - 40f);
+                    float h = Mathf.Min(700f, sh - 40f);
+                    _rect = new Rect((sw - w) / 2f, (sh - h) / 2f, w, h);
+                    _placed = true;
+                }
+                _rect = GUILayout.Window(WindowId, _rect, DrawWindow, $"{Plugin.Name}  ·  {Plugin.ToggleKey.Value} to close", Styles.Window);
+                _rect.x = Mathf.Clamp(_rect.x, -_rect.width + 80f, sw - 80f);
+                _rect.y = Mathf.Clamp(_rect.y, 0f, sh - 40f);
             }
-            _rect = GUILayout.Window(WindowId, _rect, DrawWindow, $"{Plugin.Name}  ·  {Plugin.ToggleKey.Value} to close", Styles.Window);
-            _rect.x = Mathf.Clamp(_rect.x, -_rect.width + 80f, sw - 80f);
-            _rect.y = Mathf.Clamp(_rect.y, 0f, sh - 40f);
-            GUI.matrix = saved;
+            catch (ExitGUIException)
+            {
+                throw; // IMGUI control flow, not an error.
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("draw", "Tracker window failed to draw: " + e);
+            }
+            finally
+            {
+                GUI.matrix = saved;
+            }
         }
 
         private void DrawWindow(int id)

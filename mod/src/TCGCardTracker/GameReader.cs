@@ -69,12 +69,18 @@ namespace TCGCardTracker
 
         private static List<int>? AlbumList(string suffix) => StaticField("m_CardCollectedList" + suffix) as List<int>;
 
-        /// <summary>True when the player data is loaded (we are in a shop, not on the title screen).</summary>
+        /// <summary>
+        /// True when a shop is loaded. The ShelfManager check keeps us off the title screen, where
+        /// the game helpers we call (which go through CSingleton) would create phantom managers.
+        /// </summary>
         public static bool IsReady()
         {
             try
             {
-                return GameInstance.m_FinishedSavefileLoading && CPlayerData.m_CardCollectedList != null && CPlayerData.m_CardCollectedList.Count > 0;
+                return GameInstance.m_FinishedSavefileLoading
+                    && UnityEngine.Object.FindObjectOfType<ShelfManager>() != null
+                    && CPlayerData.m_CardCollectedList != null
+                    && CPlayerData.m_CardCollectedList.Count > 0;
             }
             catch
             {
