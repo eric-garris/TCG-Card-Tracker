@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'preact/hooks';
 import { CATALOG_VERSION } from '../core/catalog';
 import { combineLocations, DEFAULT_FILTERS, visibleSets, type Filters } from '../core/collection';
 import { parseSaveText, SaveFormatError } from '../core/save';
+import { exampleSave, exampleSnapshots } from '../core/sample';
 import { makeSnapshot, type Snapshot } from '../core/snapshot';
 import {
   deleteSnapshot,
@@ -135,7 +136,13 @@ export function App() {
   }, [last, handleFiles]);
 
   const included = useMemo(() => new Set(prefs.locations), [prefs.locations]);
-  const save = last?.save ?? null;
+  // Until a save is loaded, show a clearly labelled example collection instead of an empty page.
+  const example = useMemo(
+    () => (!restoring && !last ? { save: exampleSave(), snapshots: exampleSnapshots() } : null),
+    [restoring, last],
+  );
+  const save = last?.save ?? example?.save ?? null;
+  const shownSnapshots = example ? example.snapshots : snapshots;
   const totals = useMemo(() => (save ? combineLocations(save.counts, included) : null), [save, included]);
   const sets = useMemo(() => visibleSets(save), [save]);
 
@@ -156,7 +163,7 @@ export function App() {
             <div class="sub">Set progress for TCG Card Shop Simulator, ungraded and graded 1–10</div>
           </div>
         </div>
-        {save && <FilePicker onFiles={handleFiles} label="Load save" />}
+        {last && <FilePicker onFiles={handleFiles} label="Load save" />}
         <button
           type="button"
           class="btn ghost"
@@ -190,10 +197,23 @@ export function App() {
         </div>
       )}
 
-      {restoring ? null : !save || !totals ? (
-        <Welcome onFiles={handleFiles} busy={busy} />
-      ) : (
+      {restoring || !save || !totals ? null : (
         <div class="stack">
+          {example && (
+            <>
+              <DropZone onFiles={handleFiles} busy={busy} />
+              <div class="notice example row">
+                <span class="pill">Example</span>
+                <span>
+                  Below is a made-up example collection so you can see how the tracker works. Load your save above to
+                  replace it with your own cards.
+                </span>
+                <span class="spacer" />
+                <LocationsMenu value={prefs.locations} onChange={(locations) => setPrefs({ ...prefs, locations })} />
+              </div>
+            </>
+          )}
+          {last && (
           <div class="card pad row" style={{ gap: '16px' }}>
             <div>
               <div style={{ fontWeight: 600 }}>{save.meta.playerName ?? 'Your shop'}</div>
@@ -211,6 +231,7 @@ export function App() {
             <span class="spacer" />
             <LocationsMenu value={prefs.locations} onChange={(locations) => setPrefs({ ...prefs, locations })} />
           </div>
+          )}
 
           {save.warnings.length > 0 && (
             <div class="notice warn stack">
@@ -246,7 +267,7 @@ export function App() {
                 onClick={() => showTab(t.key)}
               >
                 {t.label}
-                {t.key === 'timeline' && snapshots.length > 0 ? <span class="muted"> ({snapshots.length})</span> : null}
+                {t.key === 'timeline' && shownSnapshots.length > 0 ? <span class="muted"> ({shownSnapshots.length})</span> : null}
               </button>
             ))}
           </nav>
@@ -297,11 +318,12 @@ export function App() {
           {visited.has('timeline') && (
             <div role="tabpanel" id="panel-timeline" aria-labelledby="tab-timeline" hidden={tab !== 'timeline'}>
             <Timeline
-              snapshots={snapshots}
+              snapshots={shownSnapshots}
+              readOnly={!!example}
               sets={sets}
               included={included}
               currentPlayer={save.meta.playerName}
-              currentId={last!.snapshotId}
+              currentId={last ? last.snapshotId : (example?.snapshots[example.snapshots.length - 1]?.id ?? null)}
               onDelete={async (id) => {
                 await deleteSnapshot(id);
                 setSnapshots(await listSnapshots());
@@ -354,31 +376,5 @@ function ThemeIcon({ pref }: { pref: ThemePref }) {
       <circle cx="12" cy="12" r="9" />
       <path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor" />
     </svg>
-  );
-}
-
-function Welcome({ onFiles, busy }: { onFiles: (f: File[]) => void; busy: boolean }) {
-  return (
-    <div class="stack">
-      <DropZone onFiles={onFiles} busy={busy} />
-      <div class="tiles">
-        <div class="card tile">
-          <div class="label">Every grade, one table</div>
-          <div class="detail">See how many cards of each set you own ungraded and at every grade from 1 to 10, with total copies.</div>
-        </div>
-        <div class="card tile">
-          <div class="label">Drill down</div>
-          <div class="detail">Open any set to see each edition (Basic to Full Art) and foil vs non-foil.</div>
-        </div>
-        <div class="card tile">
-          <div class="label">Missing cards & value</div>
-          <div class="detail">Checklists for any set and grade, plus collection value at today's in-game market prices.</div>
-        </div>
-        <div class="card tile">
-          <div class="label">Progress over time</div>
-          <div class="detail">Load saves as you play and compare any two to see exactly what changed.</div>
-        </div>
-      </div>
-    </div>
   );
 }

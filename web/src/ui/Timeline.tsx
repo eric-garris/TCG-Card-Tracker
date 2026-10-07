@@ -33,12 +33,15 @@ interface Props {
   currentId: string | null;
   onDelete: (id: string) => void;
   onForgetAll: () => void;
+  /** Example data: nothing to manage or delete. */
+  readOnly?: boolean;
 }
 
 const METRICS: Column[] = ['any', 0, 'graded', 10, 9, 8];
 const DIFF_COLS: Column[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, COL_OTHER, 'graded', 'any'];
 
-export function Timeline({ snapshots, sets, included, currentPlayer, currentId, onDelete, onForgetAll }: Props) {
+export function Timeline({ snapshots, sets, included, currentPlayer, currentId, onDelete, onForgetAll, readOnly }: Props) {
+  const [confirmForget, setConfirmForget] = useState(false);
   const players = useMemo(() => [...new Set(snapshots.map((s) => s.playerName ?? ''))], [snapshots]);
   const [chosen, setPlayer] = useState<string | null>(null);
   // The shop being charted: the user's pick if it still has saves, else the shop on screen, else any.
@@ -99,6 +102,11 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
   return (
     <div class="stack">
       <div class="card pad small">
+        {readOnly && (
+          <>
+            <span class="pill">Example</span> These are four made-up saves from the example shop.{' '}
+          </>
+        )}
         Every save you load is remembered <strong>in this browser only</strong> as a small summary (no save file is
         stored), so you can watch your collection grow. Load a save after each play session, or drop several at once,
         including the <code>savedGames_ReleaseBackupFile</code> copies, which hold the previous save.
@@ -266,20 +274,34 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
         </div>
       )}
 
+      {!readOnly && (
       <div class="card">
         <div class="row pad" style={{ paddingBottom: '8px' }}>
           <strong>Saved snapshots</strong>
           <span class="muted small">({int(snapshots.length)})</span>
           <span class="spacer" />
-          <button
-            type="button"
-            class="btn"
-            onClick={() => {
-              if (confirm('Forget every saved snapshot and the last loaded save on this device?')) onForgetAll();
-            }}
-          >
-            Forget all
-          </button>
+          {confirmForget ? (
+            <span class="row" role="group" aria-label="Confirm forgetting all data">
+              <span class="small">Forget every snapshot and the last loaded save on this device?</span>
+              <button
+                type="button"
+                class="btn danger"
+                onClick={() => {
+                  setConfirmForget(false);
+                  onForgetAll();
+                }}
+              >
+                Forget all
+              </button>
+              <button type="button" class="btn" onClick={() => setConfirmForget(false)}>
+                Cancel
+              </button>
+            </span>
+          ) : (
+            <button type="button" class="btn" onClick={() => setConfirmForget(true)}>
+              Forget all…
+            </button>
+          )}
         </div>
         <div class="grid-wrap">
           <table class="list">
@@ -316,6 +338,7 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
           </table>
         </div>
       </div>
+      )}
     </div>
   );
 }

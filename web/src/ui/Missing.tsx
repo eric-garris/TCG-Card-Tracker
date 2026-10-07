@@ -76,7 +76,9 @@ export function Missing({ save, totals, sets, preset }: Props) {
   const listValue = rows.reduce((s, r) => s + (r.price ?? 0), 0);
   const pool = rows.length;
 
-  const exportCsv = () => {
+  const [copied, setCopied] = useState<'idle' | 'done' | 'failed'>('idle');
+
+  const buildCsv = () => {
     const header = ['Set', 'Number', 'Card', 'Edition', 'Foil', 'Rarity', `Copies (${columnLabel(col)})`, 'Owned as', `Market price (${priceGrade === null ? 'n/a' : priceGrade ? 'Grade ' + priceGrade : 'ungraded'})`];
     const lines = [header, ...rows.map(({ card, price }) => [
       CATALOG.setByKey.get(card.set)?.name ?? card.set,
@@ -89,8 +91,11 @@ export function Missing({ save, totals, sets, preset }: Props) {
       ownedAs(totals, card),
       price === null ? '' : price.toFixed(2),
     ])];
-    const csv = lines.map((l) => l.map((v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    return lines.map((l) => l.map((v) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v)).join(',')).join('\n');
+  };
+
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob([buildCsv()], { type: 'text/csv' }));
     const a = document.createElement('a');
     a.href = url;
     a.download = `tcg-${show}-${setKey}-${String(col)}.csv`;
@@ -193,6 +198,22 @@ export function Missing({ save, totals, sets, preset }: Props) {
             )}
           </div>
           <span class="spacer" />
+          <button
+            type="button"
+            class="btn"
+            disabled={pool === 0}
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(buildCsv());
+                setCopied('done');
+              } catch {
+                setCopied('failed');
+              }
+              setTimeout(() => setCopied('idle'), 2000);
+            }}
+          >
+            {copied === 'done' ? 'Copied' : copied === 'failed' ? 'Copy blocked' : 'Copy CSV'}
+          </button>
           <button type="button" class="btn" onClick={exportCsv} disabled={pool === 0}>
             Download CSV
           </button>

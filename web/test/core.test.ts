@@ -299,3 +299,16 @@ describe('snapshots', () => {
     ]);
   });
 });
+
+describe('example collection', () => {
+  it('parses cleanly and grows from save to save', async () => {
+    const { exampleSave, exampleSnapshots } = await import('../src/core/sample');
+    const s = exampleSave();
+    expect(s.unknown).toHaveLength(0);
+    expect(s.meta.playerName).toBe('Example Shop');
+    const snaps = exampleSnapshots();
+    const owned = snaps.map((x) => aggregate(CATALOG.bySet.get('tetramon')!, snapshotTotals(x, all), 'any').owned);
+    expect(owned.every((n, i) => i === 0 || n >= owned[i - 1]!)).toBe(true);
+    expect(owned[owned.length - 1]).toBeGreaterThan(300);
+  });
+});
