@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <AssemblyName>TCGCardTracker</AssemblyName>
+    <RootNamespace>TCGCardTracker</RootNamespace>
+    <Product>TCG Card Tracker</Product>
+    <Version>0.1.0</Version>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
+  <!--
+    Game assemblies are compile-time references only, never shipped.
+    Default: the published, stripped reference package (TCGGameLibs). Version-specific members
+    (Ascension) are read by reflection, so the build works on 0.70+ and 1.0+.
+    To build against your own install instead: dotnet build -p:GameDir="C:\...\TCG Card Shop Simulator"
+  -->
+  <PropertyGroup Condition="'$(GameDir)' != ''">
+    <ManagedDir>$(GameDir)/Card Shop Simulator_Data/Managed</ManagedDir>
+    <BepInExDir Condition="'$(BepInExDir)' == ''">$(GameDir)/BepInEx/core</BepInExDir>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(GameDir)' == '' And '$(ManagedDir)' == ''">
+    <PackageReference Include="TCGGameLibs" Version="0.70.3" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ManagedDir)' != ''">
+    <Reference Include="Assembly-CSharp" HintPath="$(ManagedDir)/Assembly-CSharp.dll" Private="false" />
+    <Reference Include="UnityEngine" HintPath="$(ManagedDir)/UnityEngine.dll" Private="false" />
+    <Reference Include="UnityEngine.CoreModule" HintPath="$(ManagedDir)/UnityEngine.CoreModule.dll" Private="false" />
+    <Reference Include="UnityEngine.IMGUIModule" HintPath="$(ManagedDir)/UnityEngine.IMGUIModule.dll" Private="false" />
+    <Reference Include="UnityEngine.InputLegacyModule" HintPath="$(ManagedDir)/UnityEngine.InputLegacyModule.dll" Private="false" />
+    <Reference Include="UnityEngine.TextRenderingModule" HintPath="$(ManagedDir)/UnityEngine.TextRenderingModule.dll" Private="false" />
+  </ItemGroup>
+
+  <!-- BepInEx 5 (from nuget.bepinex.dev, see nuget.config), or a local install via BepInExDir. -->
+  <ItemGroup Condition="'$(BepInExDir)' == ''">
+    <PackageReference Include="BepInEx.Core" Version="5.4.*" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(BepInExDir)' != ''">
+    <Reference Include="BepInEx" HintPath="$(BepInExDir)/BepInEx.dll" Private="false" />
+  </ItemGroup>
+
+</Project>
