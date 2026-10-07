@@ -42,8 +42,18 @@ const DIFF_COLS: Column[] = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, COL_OTHER, 'grade
 
 export function Timeline({ snapshots, sets, included, currentPlayer, currentId, onDelete, onForgetAll, readOnly }: Props) {
   const [confirmForget, setConfirmForget] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
   const players = useMemo(() => [...new Set(snapshots.map((s) => s.playerName ?? ''))], [snapshots]);
-  const [chosen, setPlayer] = useState<string | null>(null);
+  // Picks belong to the save on screen: loading another save starts again from its shop and latest saves.
+  type Picks = { for: string | null; player?: string; from?: string; to?: string };
+  const [stored, setPicks] = useState<Picks>({ for: currentId });
+  const picks: Picks = stored.for === currentId ? stored : { for: currentId };
+  const chosen = picks.player ?? null;
+  const fromId = picks.from ?? null;
+  const toId = picks.to ?? null;
+  const setPlayer = (player: string) => setPicks({ ...picks, player, from: undefined, to: undefined });
+  const setFromId = (from: string) => setPicks({ ...picks, from });
+  const setToId = (to: string) => setPicks({ ...picks, to });
   // The shop being charted: the user's pick if it still has saves, else the shop on screen, else any.
   const current = currentPlayer ?? '';
   const player =
@@ -53,8 +63,6 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
     () => sortSnapshots(snapshots.filter((s) => (s.playerName ?? '') === player)),
     [snapshots, player],
   );
-  const [fromId, setFromId] = useState<string | null>(null);
-  const [toId, setToId] = useState<string | null>(null);
   const [cardLimit, setCardLimit] = useState(100);
   const now = Date.now();
 
@@ -328,9 +336,27 @@ export function Timeline({ snapshots, sets, included, currentPlayer, currentId, 
                     <td class="num">{formatMoney(snapshotValue(s, included))}</td>
                     <td class="muted">{relativeTime(s.addedAt, now)}</td>
                     <td>
-                      <button type="button" class="btn ghost small" onClick={() => onDelete(s.id)} aria-label={`Delete snapshot ${snapshotLabel(s)}`}>
-                        Delete
-                      </button>
+                      {pendingDelete === s.id ? (
+                        <span class="row" style={{ flexWrap: 'nowrap' }}>
+                          <button
+                            type="button"
+                            class="btn danger small"
+                            onClick={() => {
+                              setPendingDelete(null);
+                              onDelete(s.id);
+                            }}
+                          >
+                            Delete
+                          </button>
+                          <button type="button" class="btn small" onClick={() => setPendingDelete(null)}>
+                            Keep
+                          </button>
+                        </span>
+                      ) : (
+                        <button type="button" class="btn ghost small" onClick={() => setPendingDelete(s.id)} aria-label={`Delete snapshot ${snapshotLabel(s)}`}>
+                          Delete…
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

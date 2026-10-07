@@ -26,7 +26,8 @@
   --heat-3: #b7d3f6;
   --heat-4: #86b6ef;
   --heat-5: #5598e7;
-  --heat-ink-strong: #ffffff;
+  /* Ink on the strongest heat step: dark on light blue, white on dark blue. */
+  --heat-ink-strong: #0b0b0b;
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
@@ -65,7 +66,8 @@
     --heat-2: #1a2d47;
     --heat-3: #1c3d66;
     --heat-4: #1c5cab;
-    --heat-5: #2a78d6;
+    --heat-5: #2270cc;
+    --heat-ink-strong: #ffffff;
     --series-1: #3987e5;
     --series-2: #d95926;
     --series-3: #199e70;
@@ -101,7 +103,8 @@
   --heat-2: #1a2d47;
   --heat-3: #1c3d66;
   --heat-4: #1c5cab;
-  --heat-5: #2a78d6;
+  --heat-5: #2270cc;
+  --heat-ink-strong: #ffffff;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
@@ -764,4 +767,48 @@ footer.foot {
   background: var(--accent-wash);
   color: var(--accent-ink);
   font-weight: 600;
+}
+
+/* Review fixes: readable copy counts on mid-strength cells, visible focus rings inside clipped
+   containers, and a primary button with enough contrast in both themes. */
+.cellbtn.h2 .copies,
+.cellbtn.h3 .copies {
+  color: var(--ink-2);
+}
+
+.cellbtn.h4 .copies {
+  color: var(--ink);
+}
+
+.seg button:focus-visible,
+.tabs button:focus-visible {
+  outline-offset: -2px;
+}
+
+.cellbtn:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: -2px;
+}
+
+.btn.primary {
+  background: #1f6fcf;
+  border-color: #1f6fcf;
+  color: #fff;
+}
+
+.btn.primary:hover {
+  background: #1a62b8;
+  filter: none;
+}
+
+/* Keeps the grid's sticky header and Set column working while scrolling a long drill-down. */
+.grid-wrap {
+  overflow: auto;
+  max-height: 75vh;
+}
+
+@media (max-width: 420px) {
+  .tabs button {
+    padding: 10px 10px;
+  }
 }

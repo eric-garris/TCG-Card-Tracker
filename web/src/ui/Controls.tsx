@@ -78,12 +78,17 @@ export function LocationsMenu({
 }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
       if (root.current && !root.current.contains(e.target as Node)) setOpen(false);
     };
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      setOpen(false);
+      button.current?.focus();
+    };
     document.addEventListener('mousedown', close);
     document.addEventListener('keydown', esc);
     return () => {
@@ -94,29 +99,37 @@ export function LocationsMenu({
   const set = new Set(value);
   const all = value.length === LOCATIONS.length;
   return (
-    <div ref={root} style={{ position: 'relative' }}>
-      <button type="button" class="btn" aria-expanded={open} onClick={() => setOpen(!open)}>
+    <div
+      ref={root}
+      style={{ position: 'relative', marginLeft: 'auto' }}
+      onFocusOut={(e) => {
+        // Close when keyboard focus leaves the menu, so it never covers what is focused next.
+        if (open && !root.current?.contains(e.relatedTarget as Node | null)) setOpen(false);
+      }}
+    >
+      <button ref={button} type="button" class="btn" aria-expanded={open} onClick={() => setOpen(!open)}>
         Counting: {all ? 'everywhere' : value.length === 1 && set.has('binder') ? 'binders only' : `${value.length} of ${LOCATIONS.length} places`}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
       </button>
       {open && (
-        <div class="card pad" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 20, width: 'min(340px, calc(100vw - 32px))' }}>
+        <div class="card pad" style={{ position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 20, width: 'min(340px, calc(100vw - 48px))' }}>
           <div class="small muted" style={{ marginBottom: '8px' }}>
             Count cards wherever they are in your shop. Cards leave the binder when you display, store or deck them.
+            At least one place is always counted.
           </div>
           {LOCATIONS.map((l) => (
             <label class="check" style={{ display: 'flex', padding: '4px 0' }} title={l.hint}>
               <input
                 type="checkbox"
                 checked={set.has(l.key)}
+                // At least one place is always counted, otherwise every number reads zero.
+                disabled={set.size === 1 && set.has(l.key)}
                 onChange={(e) => {
                   const next = new Set(set);
                   if (e.currentTarget.checked) next.add(l.key);
                   else next.delete(l.key);
-                  // Keep at least one place counted, otherwise every number reads zero.
-                  if (next.size === 0) return;
                   onChange(LOCATIONS.map((x) => x.key).filter((k) => next.has(k)));
                 }}
               />

@@ -107,9 +107,9 @@ export function App() {
     setBusy(false);
   }, [tab]);
 
-  // Accept a drop anywhere on the page once a save is showing.
+  // Accept a drop anywhere on the page (otherwise the browser would open the file and leave).
   useEffect(() => {
-    if (!last) return;
+    if (restoring) return;
     const over = (e: DragEvent) => {
       if (e.dataTransfer?.types.includes('Files')) {
         e.preventDefault();
@@ -120,7 +120,8 @@ export function App() {
       if (!e.relatedTarget) setDragOver(false);
     };
     const drop = (e: DragEvent) => {
-      if (!e.dataTransfer?.files.length) return;
+      // The drop zone handles its own drops.
+      if (e.defaultPrevented || !e.dataTransfer?.files.length) return;
       e.preventDefault();
       setDragOver(false);
       void handleFiles(Array.from(e.dataTransfer.files));
@@ -133,7 +134,7 @@ export function App() {
       window.removeEventListener('dragleave', leave);
       window.removeEventListener('drop', drop);
     };
-  }, [last, handleFiles]);
+  }, [restoring, handleFiles]);
 
   const included = useMemo(() => new Set(prefs.locations), [prefs.locations]);
   // Until a save is loaded, show a clearly labelled example collection instead of an empty page.
@@ -147,6 +148,22 @@ export function App() {
   const sets = useMemo(() => visibleSets(save), [save]);
 
   const themeCycle: ThemePref[] = ['system', 'light', 'dark'];
+  const themeLabel = theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto';
+
+  // Arrow keys move between tabs, as the tab role promises.
+  const onTabKey = (e: KeyboardEvent) => {
+    const i = TABS.findIndex((t) => t.key === tab);
+    let next = -1;
+    if (e.key === 'ArrowRight') next = (i + 1) % TABS.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + TABS.length) % TABS.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = TABS.length - 1;
+    if (next < 0) return;
+    e.preventDefault();
+    const key = TABS[next]!.key;
+    showTab(key);
+    document.getElementById(`tab-${key}`)?.focus();
+  };
 
   return (
     <div class="shell">
@@ -167,12 +184,12 @@ export function App() {
         <button
           type="button"
           class="btn ghost"
-          title="Theme"
-          aria-label={`Theme: ${theme}. Click to change.`}
+          title="Change theme"
+          aria-label={`${themeLabel} theme${theme === 'system' ? ' (follows your device)' : ''}. Click to change.`}
           onClick={() => setTheme(themeCycle[(themeCycle.indexOf(theme) + 1) % themeCycle.length]!)}
         >
           <ThemeIcon pref={theme} />
-          {theme === 'dark' ? 'Dark' : theme === 'light' ? 'Light' : 'Auto'}
+          {themeLabel}
         </button>
       </header>
 
@@ -256,14 +273,15 @@ export function App() {
             </details>
           )}
 
-          <nav class="tabs" role="tablist">
+          <nav class="tabs" role="tablist" onKeyDown={onTabKey}>
             {TABS.map((t) => (
               <button
                 type="button"
                 role="tab"
                 id={`tab-${t.key}`}
-                aria-controls={`panel-${t.key}`}
+                aria-controls={visited.has(t.key) ? `panel-${t.key}` : undefined}
                 aria-selected={tab === t.key}
+                tabIndex={tab === t.key ? 0 : -1}
                 onClick={() => showTab(t.key)}
               >
                 {t.label}

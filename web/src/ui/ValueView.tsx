@@ -80,7 +80,7 @@ export function ValueView({ save, totals, sets, included }: Props) {
       </div>
 
       <div class="row" style={{ alignItems: 'stretch' }}>
-        <div class="card" style={{ flex: '1 1 320px' }}>
+        <div class="card grid-wrap" style={{ flex: '1 1 320px', minWidth: '0' }}>
           <table class="list">
             <thead>
               <tr>
@@ -104,7 +104,7 @@ export function ValueView({ save, totals, sets, included }: Props) {
             </tbody>
           </table>
         </div>
-        <div class="card" style={{ flex: '1 1 320px' }}>
+        <div class="card grid-wrap" style={{ flex: '1 1 320px', minWidth: '0' }}>
           <table class="list">
             <thead>
               <tr>
@@ -137,6 +137,7 @@ export function ValueView({ save, totals, sets, included }: Props) {
         {top.length === 0 ? (
           <p class="pad muted">No priced cards yet.</p>
         ) : (
+          <div class="grid-wrap">
           <table class="list">
             <thead>
               <tr>
@@ -166,6 +167,7 @@ export function ValueView({ save, totals, sets, included }: Props) {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
       <p class="small muted">

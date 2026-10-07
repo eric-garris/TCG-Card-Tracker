@@ -130,7 +130,16 @@ describe('parseSave', () => {
     const s = parseSave(save);
     expect(s.counts.binder[card('tetramon', 0, 0).i * COLS + COL_OTHER]).toBe(1);
     expect(s.moddedGradeCount).toBe(1);
-    expect(s.warnings.some((w) => w.includes('outside 1-10'))).toBe(true);
+    expect(s.warnings.some((w) => w.includes('grading mod'))).toBe(true);
+  });
+
+  it('counts a vanilla storage-shelf slab whose grade was pushed past 10 as grade 10', () => {
+    const save = emptySave();
+    save.m_CardStorageShelfSaveDataList = [{ compactCardDataAmountList: [compact(0, 0, 14, { gradedCardIndex: 5 })] }];
+    const s = parseSave(save);
+    expect(s.counts.storage[card('tetramon', 0, 0).i * COLS + 10]).toBe(1);
+    expect(s.moddedGradeCount).toBe(0);
+    expect(s.warnings).toHaveLength(0);
   });
 
   it('handles pre-1.0 saves without Ascension or grading lists', () => {
@@ -218,6 +227,10 @@ describe('display helpers', () => {
     expect(kingstar.num).toBe(20);
     for (const q of ['20', '#20', '020', '#020', 'kings']) expect(cardMatches(kingstar, { ...DEFAULT_FILTERS, search: q })).toBe(true);
     expect(cardMatches(kingstar, { ...DEFAULT_FILTERS, search: '2' })).toBe(false);
+    // Numbers never match digits inside placeholder names such as "Megabot #17".
+    const megabot17 = CATALOG.bySet.get('megabot')!.find((c) => c.num === 17)!;
+    expect(cardMatches(megabot17, { ...DEFAULT_FILTERS, search: '7' })).toBe(false);
+    expect(cardMatches(megabot17, { ...DEFAULT_FILTERS, search: '#17' })).toBe(true);
   });
 });
 

@@ -28,19 +28,25 @@ let dbPromise: Promise<IDBDatabase | null> | null = null;
 function openDb(): Promise<IDBDatabase | null> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve) => {
+    // Some browsers (e.g. Safari 14) can leave the open request hanging; don't wait forever.
+    const timer = setTimeout(() => resolve(null), 3000);
+    const done = (db: IDBDatabase | null) => {
+      clearTimeout(timer);
+      resolve(db);
+    };
     try {
-      if (typeof indexedDB === 'undefined') return resolve(null);
+      if (typeof indexedDB === 'undefined') return done(null);
       const req = indexedDB.open(DB_NAME, 1);
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(SNAPSHOTS)) db.createObjectStore(SNAPSHOTS, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(STATE)) db.createObjectStore(STATE);
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-      req.onblocked = () => resolve(null);
+      req.onsuccess = () => done(req.result);
+      req.onerror = () => done(null);
+      req.onblocked = () => done(null);
     } catch {
-      resolve(null);
+      done(null);
     }
   });
   return dbPromise;

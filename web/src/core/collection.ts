@@ -77,9 +77,10 @@ export function cardMatches(card: CardDef, f: Filters): boolean {
   if (f.search) {
     const q = f.search.trim().toLowerCase();
     const n = q.replace(/^#/, '');
-    // Numbers match the binder number, with or without leading zeros ("7", "#007").
-    const numberMatch = /^\d+$/.test(n) && Number(n) === card.num;
-    if (q && !numberMatch && !card.name.toLowerCase().includes(q)) return false;
+    // A number searches binder numbers only, with or without leading zeros ("7", "#007").
+    if (/^\d+$/.test(n)) {
+      if (Number(n) !== card.num) return false;
+    } else if (q && !card.name.toLowerCase().includes(q)) return false;
   }
   return true;
 }

@@ -38,8 +38,11 @@ function ownedAs(totals: Int32Array, card: CardDef): string {
 }
 
 export function Missing({ save, totals, sets, preset }: Props) {
-  const [setKey, setSetKey] = useState<SetKey | 'all'>(sets[0]?.key ?? 'all');
-  const [group, setGroup] = useState<string>('all');
+  const [pickedSet, setSetKey] = useState<SetKey | 'all'>(sets[0]?.key ?? 'all');
+  const [pickedGroup, setGroup] = useState<string>('all');
+  // A newly loaded save may not have the picked set (mod-only sets); fall back to the first one.
+  const setKey: SetKey | 'all' = pickedSet === 'all' || sets.some((s) => s.key === pickedSet) ? pickedSet : (sets[0]?.key ?? 'all');
+  const group = setKey === pickedSet ? pickedGroup : 'all';
   const [col, setCol] = useState<Column>(0);
   const [show, setShow] = useState<Show>('missing');
   const [sort, setSort] = useState<Sort>('number');
@@ -96,7 +99,8 @@ export function Missing({ save, totals, sets, preset }: Props) {
   };
 
   const exportCsv = () => {
-    const url = URL.createObjectURL(new Blob([buildCsv()], { type: 'text/csv' }));
+    // The BOM makes Excel read the file as UTF-8 ("×", "·").
+    const url = URL.createObjectURL(new Blob(['\uFEFF' + buildCsv()], { type: 'text/csv;charset=utf-8' }));
     const a = document.createElement('a');
     a.href = url;
     a.download = `tcg-${show}-${setKey}-${String(col)}.csv`;
@@ -195,6 +199,7 @@ export function Missing({ save, totals, sets, preset }: Props) {
               <span class="muted small">
                 {' '}
                 · market value of one of each: {formatMoney(listValue)}
+                {typeof col === 'string' ? ' at ungraded prices' : ''}
               </span>
             )}
           </div>
@@ -235,7 +240,7 @@ export function Missing({ save, totals, sets, preset }: Props) {
                   {setKey === 'all' && <th>Set</th>}
                   <th>Rarity</th>
                   <th>Owned as</th>
-                  <th class="num">Price{priceGrade ? ` (G${priceGrade})` : ''}</th>
+                  <th class="num">Price{priceGrade ? ` (G${priceGrade})` : typeof col === 'string' ? ' (ungraded)' : ''}</th>
                 </tr>
               </thead>
               <tbody>

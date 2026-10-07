@@ -83,6 +83,12 @@ export interface ParsedSave {
 
 export class SaveFormatError extends Error {}
 
+/**
+ * Grades from 11 up to this come from a vanilla storage-shelf quirk and mean "10". Grading mods
+ * (e.g. Grading Overhaul) store encoded grades in the hundreds of millions, far above it.
+ */
+const VANILLA_GRADE_LIMIT = 100_000;
+
 type Json = Record<string, unknown>;
 
 function isObj(v: unknown): v is Json {
@@ -184,7 +190,12 @@ export function parseSave(root: unknown): ParsedSave {
     let col: number;
     if (grade <= 0) col = 0;
     else if (grade <= 10 && Number.isInteger(grade)) col = grade;
-    else {
+    else if (grade < VANILLA_GRADE_LIMIT) {
+      // The unmodded game can push a slab's stored grade past 10: a storage shelf merges
+      // ungraded copies of the same card into the slab's row (amount += copies). The game
+      // shows and treats such cards as grade 10, so count them there.
+      col = 10;
+    } else {
       col = COL_OTHER;
       moddedGradeCount += copies;
     }
@@ -320,7 +331,7 @@ export function parseSave(root: unknown): ParsedSave {
   }
   if (moddedGradeCount > 0) {
     warnings.push(
-      `${moddedGradeCount} graded card${moddedGradeCount === 1 ? ' has' : 's have'} a grade outside 1-10, which grading mods such as Grading Overhaul write. They are counted under "Other grade".`,
+      `${moddedGradeCount} graded card${moddedGradeCount === 1 ? ' has' : 's have'} an encoded grade written by a grading mod such as Grading Overhaul. They are counted under "Other grade" and have no price here.`,
     );
   }
 

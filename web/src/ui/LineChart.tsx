@@ -47,18 +47,16 @@ export function LineChart({ title, xLabels, series, yFormat, yMax, height = 260 
   }, []);
 
   const n = xLabels.length;
-  const showDirect = series.length <= 4;
-  const m = { top: 14, right: showDirect ? 112 : 16, bottom: 40, left: 56 };
-  const w = width - m.left - m.right;
-  const h = height - m.top - m.bottom;
+  const mTop = 14;
+  const mBottom = 40;
+  const mLeft = 56;
+  const h = height - mTop - mBottom;
   const dataMax = Math.max(0, ...series.flatMap((s) => s.values.filter((v): v is number => v !== null)));
   const top = yMax ?? niceMax(dataMax * 1.05);
-  const x = (i: number) => m.left + (n <= 1 ? w / 2 : (i / (n - 1)) * w);
-  const y = (v: number) => m.top + h - (Math.min(v, top) / top) * h;
+  const y = (v: number) => mTop + h - (Math.min(v, top) / top) * h;
   const ticks = Array.from({ length: 5 }, (_, i) => (top / 4) * i);
-  const labelEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(w / 90))));
 
-  // Direct labels only when the series' last points are far enough apart.
+  // Direct end labels only when there is room for them and the last points are far enough apart.
   const ends = series
     .map((s) => {
       for (let i = s.values.length - 1; i >= 0; i--) {
@@ -69,7 +67,12 @@ export function LineChart({ title, xLabels, series, yFormat, yMax, height = 260 
     })
     .filter((e): e is NonNullable<typeof e> => e !== null)
     .sort((a, b) => a.py - b.py);
-  const labelsFit = showDirect && ends.every((e, k) => k === 0 || e.py - ends[k - 1]!.py >= 15);
+  const labelsFit =
+    series.length <= 4 && width >= 480 && ends.every((e, k) => k === 0 || e.py - ends[k - 1]!.py >= 15);
+  const m = { top: mTop, right: labelsFit ? 112 : 16, bottom: mBottom, left: mLeft };
+  const w = width - m.left - m.right;
+  const x = (i: number) => m.left + (n <= 1 ? w / 2 : (i / (n - 1)) * w);
+  const labelEvery = Math.max(1, Math.ceil(n / Math.max(1, Math.floor(w / 90))));
 
   const pick = (clientX: number) => {
     const svg = wrap.current?.querySelector('svg');
