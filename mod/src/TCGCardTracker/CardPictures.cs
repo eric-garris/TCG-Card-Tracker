@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Text;
 using TCGCardTracker.Core;
 using UnityEngine;
 using UnityEngine.UI;
@@ -81,6 +83,13 @@ namespace TCGCardTracker
 
         /// <summary>False once the game's card renderer could not be used; the list then shows no pictures.</summary>
         public bool Available => !_disabled;
+
+        /// <summary>Why pictures are off, for the panel.</summary>
+        public string Status { get; private set; } = "";
+
+        /// <summary>The first few pictures of a session are checked, saved and logged, so a broken picture can be diagnosed.</summary>
+        private const int PictureChecks = 3;
+        private int _checks;
 
         // ---------- Requests from the window (OnGUI) ----------
 
@@ -258,11 +267,46 @@ namespace TCGCardTracker
             stage.SetFrame = Time.frameCount;
             stage.SetTime = Time.realtimeSinceStartup;
             stage.RenderedFrame = -1;
-            var ui = stage.Group.m_CardUI;
+            var group = stage.Group;
+            var ui = group.m_CardUI;
+
+            // The copy's own start-up can sign it up with the game's card manager again, which
+            // hides or simplifies cards far from the player (ours are far below the shop).
+            Card3dUISpawner.RemoveCardFromManager(group);
+            group.SetSimplifyCardDistanceCull(false);
+            group.SetVisibility(true);
+
             ui.SetCardUI(data);
-            stage.Group.EvaluateCardGrade(data);
-            ui.SetBrightness(1f);
+            group.EvaluateCardGrade(data);
             if (ui.m_IsFarDistanceCulled) ui.ResetFarDistanceCull();
+            HideExtras(stage);
+        }
+
+        /// <summary>Only the card face: no back, card count or "new" badge.</summary>
+        private static void HideExtras(Stage stage)
+        {
+            var group = stage.Group;
+            var ui = group.m_CardUI;
+            group.SetCardCountTextVisibility(false);
+            if (group.m_NewCardIndicator != null && group.m_NewCardIndicator.activeSelf) group.m_NewCardIndicator.SetActive(false);
+            if (group.m_CardBackMesh != null && group.m_CardBackMesh.activeSelf) group.m_CardBackMesh.SetActive(false);
+            if (ui.m_CardBack != null && ui.m_CardBack.activeSelf) ui.m_CardBack.SetActive(false);
+        }
+
+        /// <summary>Undoes anything that switched the card face off since it was set (culling, pooling).</summary>
+        private static void EnsureShown(Stage stage)
+        {
+            var group = stage.Group;
+            var ui = group.m_CardUI;
+            if (!group.gameObject.activeSelf)
+            {
+                Plugin.LogOnce("pictures-reactivate", "Card pictures: the card copy had been switched off; switching it back on.");
+                group.gameObject.SetActive(true);
+            }
+            if (!ui.gameObject.activeSelf) ui.gameObject.SetActive(true);
+            if (ui.m_CardFront != null && !ui.m_CardFront.activeSelf) ui.m_CardFront.SetActive(true);
+            if (ui.m_IsFarDistanceCulled) ui.ResetFarDistanceCull();
+            HideExtras(stage);
         }
 
         /// <summary>The card's UI has been rebuilt (one frame on) and its art has streamed in, or we gave up waiting.</summary>
@@ -307,6 +351,7 @@ namespace TCGCardTracker
             float w = right.magnitude, h = up.magnitude;
             if (w <= 0f || h <= 0f) return RenderFailed();
             _renderFailures = 0;
+            EnsureShown(stage);
             SetLayer(stage.Group.gameObject);
             // UI faces the camera that looks along the canvas's forward; working it out from the
             // corners keeps the picture upright and unmirrored however the prefab is rotated.
@@ -317,7 +362,7 @@ namespace TCGCardTracker
             if (!_loggedFrame)
             {
                 _loggedFrame = true;
-                Plugin.Log.LogInfo($"Card pictures: framing '{face.name}' ({w:0.###} x {h:0.###}).");
+                Plugin.Log.LogInfo($"Card pictures: framing '{face.name}' ({w:0.###} x {h:0.###}) at {center}, facing {forward}.");
             }
 
             _camera.transform.SetPositionAndRotation(center - forward * dist, Quaternion.LookRotation(forward, up));
@@ -336,6 +381,7 @@ namespace TCGCardTracker
                 _camera.targetTexture = null;
                 RenderTexture.active = active;
             }
+            if (_checks < PictureChecks) CheckPicture(stage, target, face);
             return true;
         }
 
@@ -374,15 +420,15 @@ namespace TCGCardTracker
             if (_camera != null && AllAlive()) return true;
             Teardown(keepThumbs: true);
 
-            var spawner = UnityEngine.Object.FindObjectOfType<Card3dUISpawner>();
-            Card3dUIGroup? prefab = spawner != null ? spawner.m_Card3dUIPrefab : null;
+            var prefab = FindCardPrefab(out string source);
             if (prefab == null)
             {
-                Disable("the game's card renderer was not found");
+                Disable("the game's 3D card was not found");
                 return false;
             }
-            _loader = UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
+            _loader = LoadStreamTexture.m_Instance != null ? LoadStreamTexture.m_Instance : UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
             _layer = SpareLayer();
+            Plugin.Log.LogInfo($"Card pictures: using '{prefab.name}' from {source}, layer {_layer}, art loader {(_loader != null ? "found" : "not found")}.");
 
             var camGo = new GameObject("TCGCardTracker.PictureCamera");
             _camera = camGo.AddComponent<Camera>();
@@ -406,6 +452,143 @@ namespace TCGCardTracker
             _work = NewTexture(ThumbTexHeight * 2, 16, "TCGCardTracker work");
             _awake = true;
             return true;
+        }
+
+        /// <summary>The game's 3D card: the card spawner's prefab, else any card the game has loaded.</summary>
+        private static Card3dUIGroup? FindCardPrefab(out string source)
+        {
+            var spawner = Card3dUISpawner.m_Instance != null ? Card3dUISpawner.m_Instance : UnityEngine.Object.FindObjectOfType<Card3dUISpawner>();
+            if (spawner != null && spawner.m_Card3dUIPrefab != null)
+            {
+                source = "the card spawner";
+                return spawner.m_Card3dUIPrefab;
+            }
+            Card3dUIGroup? fallback = null;
+            foreach (var g in Resources.FindObjectsOfTypeAll<Card3dUIGroup>())
+            {
+                if (g == null || g.m_CardUI == null || g.name.StartsWith("TCGCardTracker", StringComparison.Ordinal)) continue;
+                if (g.transform.root.name.StartsWith("TCGCardTracker", StringComparison.Ordinal)) continue;
+                // Prefer an asset (not placed in a scene), whose state the game hasn't changed.
+                if (!g.gameObject.scene.IsValid())
+                {
+                    source = "loaded assets";
+                    return g;
+                }
+                fallback ??= g;
+            }
+            source = "a card in the shop";
+            return fallback;
+        }
+
+        // ---------- Diagnostics ----------
+
+        /// <summary>Saves the picture next to the mod and logs how much of it shows a card, plus the card's make-up.</summary>
+        private void CheckPicture(Stage stage, RenderTexture rt, RectTransform face)
+        {
+            int n = ++_checks;
+            Texture2D? tex = null;
+            var active = RenderTexture.active;
+            try
+            {
+                RenderTexture.active = rt;
+                tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
+                tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+                tex.Apply();
+                RenderTexture.active = active;
+
+                Color32 bg = Background;
+                var px = tex.GetPixels32();
+                int drawn = 0;
+                foreach (var p in px)
+                    if (Math.Abs(p.r - bg.r) + Math.Abs(p.g - bg.g) + Math.Abs(p.b - bg.b) > 24) drawn++;
+                float pct = px.Length == 0 ? 0f : drawn * 100f / px.Length;
+
+                string path = "";
+                try
+                {
+                    string dir = Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? "";
+                    if (dir.Length == 0) dir = Application.persistentDataPath;
+                    path = Path.Combine(dir, $"card-picture-check-{n}.png");
+                    File.WriteAllBytes(path, tex.EncodeToPNG());
+                }
+                catch (Exception e)
+                {
+                    path = "(could not save: " + e.Message + ")";
+                }
+
+                string msg = $"Card pictures: check {n}: {pct:0.#}% of the picture shows the card. Saved to {path}.";
+                if (pct < 2f) Plugin.Log.LogWarning(msg + " The picture is empty.");
+                else Plugin.Log.LogInfo(msg);
+                if (n == 1 || pct < 2f) Plugin.LogOnce("pictures-describe:" + (pct < 2f), Describe(stage, face));
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pictures-check", "Card pictures: could not check a picture: " + e.Message);
+            }
+            finally
+            {
+                RenderTexture.active = active;
+                if (tex != null) UnityEngine.Object.Destroy(tex);
+            }
+        }
+
+        private string Describe(Stage stage, RectTransform face)
+        {
+            var sb = new StringBuilder();
+            var cam = _camera;
+            sb.Append("Card pictures: diagnostics. Color space ").Append(QualitySettings.activeColorSpace)
+              .Append(", picture layer ").Append(_layer).Append(", face '").Append(face.name).Append("'.\n");
+            if (cam != null)
+                sb.Append("  camera at ").Append(cam.transform.position).Append(" looking ").Append(cam.transform.forward)
+                  .Append(", ortho size ").Append(cam.orthographicSize.ToString("0.####"))
+                  .Append(", clip ").Append(cam.nearClipPlane.ToString("0.####")).Append("-").Append(cam.farClipPlane.ToString("0.####")).Append("\n");
+            int lines = 0;
+            Walk(stage.Root.transform, 1, sb, ref lines);
+            return sb.ToString();
+        }
+
+        private static void Walk(Transform t, int depth, StringBuilder sb, ref int lines)
+        {
+            if (++lines > 400)
+            {
+                if (lines == 401) sb.Append("  ...\n");
+                return;
+            }
+            sb.Append(' ', depth * 2).Append(t.name);
+            if (!t.gameObject.activeSelf) sb.Append(" [off]");
+            sb.Append(" L").Append(t.gameObject.layer);
+            if (t is RectTransform rt)
+            {
+                var size = Vector2.Scale(rt.rect.size, rt.lossyScale);
+                sb.Append(" size ").Append(size.x.ToString("0.####")).Append('x').Append(size.y.ToString("0.####"));
+            }
+            foreach (var c in t.GetComponents<Component>())
+            {
+                if (c == null || c is Transform) continue;
+                sb.Append(" | ").Append(c.GetType().Name);
+                switch (c)
+                {
+                    case Canvas cv:
+                        sb.Append('(').Append(cv.renderMode).Append(cv.enabled ? "" : ", off").Append(", order ").Append(cv.sortingOrder)
+                          .Append(", camera ").Append(cv.worldCamera != null ? cv.worldCamera.name : "none").Append(')');
+                        break;
+                    case Image img:
+                        sb.Append('(').Append(img.enabled ? "" : "off, ").Append(img.sprite != null ? img.sprite.name : "no sprite")
+                          .Append(", a ").Append(img.color.a.ToString("0.##")).Append(", ").Append(img.material != null && img.material.shader != null ? img.material.shader.name : "no shader").Append(')');
+                        break;
+                    case Graphic g:
+                        sb.Append('(').Append(g.enabled ? "" : "off, ").Append("a ").Append(g.color.a.ToString("0.##")).Append(')');
+                        break;
+                    case Renderer r:
+                        sb.Append('(').Append(r.enabled ? "" : "off, ").Append(r.sharedMaterial != null && r.sharedMaterial.shader != null ? r.sharedMaterial.shader.name : "no material").Append(')');
+                        break;
+                    case Behaviour b when !b.enabled:
+                        sb.Append("(off)");
+                        break;
+                }
+            }
+            sb.Append('\n');
+            for (int i = 0; i < t.childCount; i++) Walk(t.GetChild(i), depth + 1, sb, ref lines);
         }
 
         private bool AllAlive()
@@ -432,9 +615,6 @@ namespace TCGCardTracker
 
             // Keep the game's card manager (culling, brightness) away from our copies.
             Card3dUISpawner.RemoveCardFromManager(group);
-            group.SetCardCountTextVisibility(false);
-            if (group.m_NewCardIndicator != null) group.m_NewCardIndicator.SetActive(false);
-            if (group.m_CardBackMesh != null) group.m_CardBackMesh.SetActive(false);
 
             return new Stage
             {
@@ -522,6 +702,8 @@ namespace TCGCardTracker
             Teardown(keepThumbs: false);
             _disabled = false;
             _failures = 0;
+            _renderFailures = 0;
+            Status = "";
         }
 
         private void Teardown(bool keepThumbs)
@@ -557,6 +739,7 @@ namespace TCGCardTracker
         {
             if (_disabled) return;
             _disabled = true;
+            Status = $"Card pictures are off: {why}. Details are in BepInEx\\LogOutput.log.";
             Plugin.Log.LogWarning($"Card pictures are off: {why}. The card list still works without them.");
             try
             {
