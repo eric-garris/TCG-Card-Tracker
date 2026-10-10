@@ -1,6 +1,6 @@
 {
   "name": "TCG_Card_Tracker",
-  "version_number": "0.2.0",
+  "version_number": "0.2.1",
   "website_url": "https://github.com/eric-garris/TCG-Card-Tracker",
   "description": "In-game collection tracker: cards owned per set, ungraded and at every grade 1-10, with missing-card lists. Press F7.",
   "dependencies": ["BepInEx-BepInExPack-5.4.2305"]
