@@ -20,6 +20,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<float> UiScale = null!;
         internal static ConfigEntry<bool> LiveShelves = null!;
         internal static ConfigEntry<bool> ShowCopies = null!;
+        internal static ConfigEntry<bool> ShowPictures = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -43,6 +44,8 @@ namespace TCGCardTracker
             ToggleKey = Config.Bind("General", "ToggleKey", new KeyboardShortcut(KeyCode.F7), "Key that opens and closes the tracker.");
             UiScale = Config.Bind("General", "UiScale", 1f, "Size of the tracker window (0.75 - 2).");
             ShowCopies = Config.Bind("General", "ShowCopies", true, "Show the total number of copies under each count.");
+            ShowPictures = Config.Bind("General", "CardPictures", true,
+                "Show a picture of each card in the card list, drawn by the game itself. Hover a picture to enlarge it, click to pin it.");
             LiveShelves = Config.Bind("General", "LiveShelves", true,
                 "Re-read display shelves, storage and boxes from the shop when the tracker opens or refreshes. Turn off to use the last save instead.");
             foreach (var l in Locations)

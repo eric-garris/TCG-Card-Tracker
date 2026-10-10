@@ -9,15 +9,22 @@ namespace TCGCardTracker
     /// <summary>
     /// The in-game panel (IMGUI). Overview: sets x (Ungraded, Grade 1-10, Any grade, Any form),
     /// each cell "owned / total" plus copies, expandable to edition and foil. Clicking a cell
-    /// opens the card list for it (missing or owned).
+    /// opens the card list for it (missing or owned), with a picture of each card: hover one to
+    /// enlarge it, click to pin it in its own window.
     /// </summary>
     internal sealed class TrackerWindow
     {
         private const int WindowId = 0x54434754; // "TCGT"
+        private const int PinnedWindowId = WindowId + 1;
+        private const int HoverWindowId = WindowId + 2;
         private const float NameWidth = 210f;
         private const float CellWidth = 64f;
         private const float RowHeight = 36f;
-        private const float ListRowHeight = 24f;
+        private const float TextRowHeight = 24f;
+        private const float ThumbHeight = 60f;
+        private const float ThumbWidth = ThumbHeight * CardPictures.Aspect;
+        private const float LargeHeight = 420f;
+        private const float LargeWidth = LargeHeight * CardPictures.Aspect;
 
         private static readonly Column[] GridColumns =
         {
@@ -34,6 +41,17 @@ namespace TCGCardTracker
         private Vector2 _gridScroll;
         private Vector2 _listScroll;
         private InteractionPlayerController? _uiController;
+
+        // Card pictures. Hover is found while painting the list and used from the next frame,
+        // so every IMGUI pass of a frame lays out the same windows.
+        private readonly CardPictures _pictures = new CardPictures();
+        private bool _showPictures;
+        private Card? _hover;
+        private Card? _hoverNext;
+        private Card? _pinned;
+        private Rect _pinnedRect;
+        private bool _pinnedPlaced;
+        private float _listViewHeight;
 
         private Catalog? _catalog;
         private Collection? _collection;
@@ -91,6 +109,7 @@ namespace TCGCardTracker
         private void Close()
         {
             _open = false;
+            _hover = _hoverNext = _pinned = null;
             // If the game was paused while the panel was open, hand the cursor back only once it
             // resumes (the pause menu still needs it, and the game's UI-mode reset waits on game time).
             if (Time.timeScale == 0f) return;
@@ -107,9 +126,12 @@ namespace TCGCardTracker
             _collection = null;
             _rows = null;
             _list = null;
+            _hover = _hoverNext = _pinned = null;
+            _showPictures = false;
+            _pictures.Reset();
         }
 
-        /// <summary>Called every frame: keeps binder counts current while the panel is open.</summary>
+        /// <summary>Called every frame: keeps binder counts current and card pictures drawn while the panel is open.</summary>
         public void Tick()
         {
             if (!_open)
@@ -119,10 +141,22 @@ namespace TCGCardTracker
                     GameReader.ExitUIMode(_uiController);
                     _uiController = null;
                 }
+                _showPictures = false;
+                _pictures.Sleep();
                 return;
             }
-            if (Time.realtimeSinceStartup < _nextAutoRefresh) return;
-            Refresh(full: false);
+            if (Time.realtimeSinceStartup >= _nextAutoRefresh) Refresh(full: false);
+
+            _showPictures = Plugin.ShowPictures.Value && _catalog != null && _pictures.Available;
+            if (_showPictures)
+            {
+                _pictures.Tick(_tab == 1 ? _hover : null, _pinned);
+            }
+            else
+            {
+                _hover = _hoverNext = _pinned = null;
+                _pictures.Sleep();
+            }
         }
 
         private void Refresh(bool full)
@@ -301,9 +335,11 @@ namespace TCGCardTracker
                     _rect = new Rect((sw - w) / 2f, (sh - h) / 2f, w, h);
                     _placed = true;
                 }
+                if (Event.current.type == EventType.Layout) _hover = _showPictures && _tab == 1 ? _hoverNext : null;
                 _rect = GUILayout.Window(WindowId, _rect, DrawWindow, $"{Plugin.Name}  ·  {Plugin.ToggleKey.Value} to close", Styles.Window);
                 _rect.x = Mathf.Clamp(_rect.x, -_rect.width + 80f, sw - 80f);
                 _rect.y = Mathf.Clamp(_rect.y, 0f, sh - 40f);
+                DrawPictureWindows(sw, sh);
             }
             catch (ExitGUIException)
             {
@@ -321,6 +357,7 @@ namespace TCGCardTracker
 
         private void DrawWindow(int id)
         {
+            if (Event.current.type == EventType.Repaint) _hoverNext = null;
             GUILayout.BeginHorizontal();
             if (GUILayout.Toggle(_tab == 0, "Overview", Styles.Tab, GUILayout.Width(110))) _tab = 0;
             if (GUILayout.Toggle(_tab == 1, "Card list", Styles.Tab, GUILayout.Width(110))) _tab = 1;
@@ -511,7 +548,11 @@ namespace TCGCardTracker
             int priceGrade = _selCol.Value >= 0 && _selCol.Value <= 10 ? _selCol.Value : 0;
             GUILayout.Label($"{list.Count:N0} {(_showOwned ? "owned" : "missing")} · {_selSet.Name}{(_selGroup != null ? " · " + _selGroup : "")}{(_selFoil == 1 ? " · Foil" : _selFoil == 0 ? " · Non-foil" : "")} · {_selCol.LongLabel}", Styles.Body);
 
+            bool pictures = _showPictures;
+            float rowHeight = pictures ? ThumbHeight + 4f : TextRowHeight;
+
             GUILayout.BeginHorizontal();
+            if (pictures) GUILayout.Space(ThumbWidth + 8f);
             GUILayout.Label("#", Styles.Header, GUILayout.Width(44));
             GUILayout.Label("Card", Styles.Header, GUILayout.Width(300));
             GUILayout.Label("Rarity", Styles.Header, GUILayout.Width(90));
@@ -522,23 +563,122 @@ namespace TCGCardTracker
             _listScroll = GUILayout.BeginScrollView(_listScroll);
             // Only lay out the rows in view; the rest are spacers.
             float viewH = Mathf.Max(200f, _rect.height - 260f);
-            int first = Mathf.Clamp((int)(_listScroll.y / ListRowHeight) - 2, 0, Math.Max(0, list.Count));
-            int last = Mathf.Min(list.Count, first + (int)(viewH / ListRowHeight) + 6);
-            if (first > 0) GUILayout.Space(first * ListRowHeight);
+            int first = Mathf.Clamp((int)(_listScroll.y / rowHeight) - 2, 0, Math.Max(0, list.Count));
+            int last = Mathf.Min(list.Count, first + (int)(viewH / rowHeight) + 6);
+            if (first > 0) GUILayout.Space(first * rowHeight);
+            var height = GUILayout.Height(rowHeight);
             for (int i = first; i < last; i++)
             {
                 var c = list[i];
                 var p = GameReader.MarketPrice(c, priceGrade);
-                GUILayout.BeginHorizontal(GUILayout.Height(ListRowHeight));
-                GUILayout.Label(c.Num.ToString("000"), Styles.Muted, GUILayout.Width(44));
-                GUILayout.Label(c.Label, Styles.Body, GUILayout.Width(300));
-                GUILayout.Label(c.Tier.ToString(), Styles.Muted, GUILayout.Width(90));
-                GUILayout.Label(OwnedAs(c), Styles.Body, GUILayout.Width(260));
-                GUILayout.Label(p.HasValue ? GameReader.PriceString(p.Value) : "-", Styles.Body, GUILayout.Width(110));
+                GUILayout.BeginHorizontal(height);
+                if (pictures) DrawThumbnail(c);
+                GUILayout.Label(c.Num.ToString("000"), Styles.RowMuted, GUILayout.Width(44), height);
+                GUILayout.Label(c.Label, Styles.RowBody, GUILayout.Width(300), height);
+                GUILayout.Label(c.Tier.ToString(), Styles.RowMuted, GUILayout.Width(90), height);
+                GUILayout.Label(OwnedAs(c), Styles.RowBody, GUILayout.Width(260), height);
+                GUILayout.Label(p.HasValue ? GameReader.PriceString(p.Value) : "-", Styles.RowBody, GUILayout.Width(110), height);
                 GUILayout.EndHorizontal();
             }
-            if (last < list.Count) GUILayout.Space((list.Count - last) * ListRowHeight);
+            if (last < list.Count) GUILayout.Space((list.Count - last) * rowHeight);
             GUILayout.EndScrollView();
+            if (Event.current.type == EventType.Repaint) _listViewHeight = GUILayoutUtility.GetLastRect().height;
+            if (pictures) GUILayout.Label("Hover a picture to enlarge it, click it to pin it.", Styles.Muted);
+        }
+
+        // ---------- Card pictures ----------
+
+        private static bool Same(Card? a, Card? b) =>
+            a != null && b != null && a.Set.ExpansionType == b.Set.ExpansionType && a.List == b.List && a.SaveIndex == b.SaveIndex;
+
+        /// <summary>One row's thumbnail (inside the list's scroll view): hover to enlarge, click to pin.</summary>
+        private void DrawThumbnail(Card c)
+        {
+            var r = GUILayoutUtility.GetRect(ThumbWidth, ThumbHeight, GUILayout.Width(ThumbWidth), GUILayout.Height(ThumbHeight));
+            var e = Event.current;
+            if (e.type == EventType.Repaint)
+            {
+                var tex = _pictures.Thumbnail(c);
+                if (tex != null) GUI.DrawTexture(r, tex, ScaleMode.ScaleToFit, false);
+                else GUI.Box(r, GUIContent.none, Styles.Placeholder);
+                if (Same(c, _pinned)) GUI.Box(r, GUIContent.none, Styles.Outline);
+                // Rows just outside the view are laid out too; only count the mouse over the visible part.
+                var m = e.mousePosition;
+                if (r.Contains(m) && m.y >= _listScroll.y && m.y <= _listScroll.y + _listViewHeight) _hoverNext = c;
+            }
+            if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+            {
+                _pinned = Same(c, _pinned) ? null : c;
+                _pinnedPlaced &= _pinned != null;
+            }
+        }
+
+        private Texture? LargePicture(int slot, Card c) => _pictures.Large(slot, c) ?? _pictures.Thumbnail(c);
+
+        /// <summary>The pinned picture window and the hover popup, drawn above the main window.</summary>
+        private void DrawPictureWindows(float sw, float sh)
+        {
+            if (!_showPictures) return;
+            float w = LargeWidth + 20f, h = LargeHeight + 44f;
+
+            if (_pinned != null)
+            {
+                if (!_pinnedPlaced)
+                {
+                    // Beside the main window where there is room, else over its right edge.
+                    float x = _rect.xMax + 8f;
+                    if (x + w > sw) x = _rect.x - w - 8f;
+                    if (x < 0f) x = Mathf.Max(0f, Mathf.Min(sw, _rect.xMax) - w);
+                    _pinnedRect = new Rect(x, Mathf.Clamp(_rect.y, 0f, Mathf.Max(0f, sh - h)), w, h);
+                    _pinnedPlaced = true;
+                }
+                _pinnedRect = GUI.Window(PinnedWindowId, _pinnedRect, DrawPinned, GUIContent.none, Styles.Window);
+                _pinnedRect.x = Mathf.Clamp(_pinnedRect.x, -w + 80f, sw - 80f);
+                _pinnedRect.y = Mathf.Clamp(_pinnedRect.y, 0f, sh - 40f);
+            }
+
+            if (_hover != null && !Same(_hover, _pinned))
+            {
+                float pw = LargeWidth + 12f, ph = LargeHeight + 12f;
+                var m = Event.current.mousePosition;
+                float x = m.x + 24f;
+                if (x + pw > sw) x = m.x - 24f - pw;
+                float y = Mathf.Clamp(m.y - ph / 2f, 0f, Mathf.Max(0f, sh - ph));
+                GUI.Window(HoverWindowId, new Rect(x, y, pw, ph), DrawHover, GUIContent.none, Styles.Popup);
+                GUI.BringWindowToFront(HoverWindowId);
+            }
+        }
+
+        private void DrawPinned(int id)
+        {
+            var c = _pinned;
+            if (c == null) return;
+            float w = _pinnedRect.width;
+            GUI.Label(new Rect(10f, 4f, w - 50f, 22f), c.Label, Styles.Body);
+            if (GUI.Button(new Rect(w - 34f, 4f, 24f, 20f), "x"))
+            {
+                _pinned = null;
+                _pinnedPlaced = false;
+                return;
+            }
+            var r = new Rect(10f, 32f, LargeWidth, LargeHeight);
+            if (Event.current.type == EventType.Repaint)
+            {
+                var tex = LargePicture(1, c);
+                if (tex != null) GUI.DrawTexture(r, tex, ScaleMode.ScaleToFit, false);
+                else GUI.Box(r, GUIContent.none, Styles.Placeholder);
+            }
+            GUI.DragWindow();
+        }
+
+        private void DrawHover(int id)
+        {
+            var c = _hover;
+            if (c == null || Event.current.type != EventType.Repaint) return;
+            var r = new Rect(6f, 6f, LargeWidth, LargeHeight);
+            var tex = LargePicture(0, c);
+            if (tex != null) GUI.DrawTexture(r, tex, ScaleMode.ScaleToFit, false);
+            else GUI.Box(r, GUIContent.none, Styles.Placeholder);
         }
 
         // ---------- Styles ----------
@@ -548,6 +688,7 @@ namespace TCGCardTracker
             private static bool _ready;
             public static GUIStyle Window = null!, Tab = null!, Chip = null!, Header = null!, HeaderCenter = null!;
             public static GUIStyle Row = null!, RowStrong = null!, Body = null!, Muted = null!;
+            public static GUIStyle RowBody = null!, RowMuted = null!, Popup = null!, Placeholder = null!, Outline = null!;
             private static GUIStyle[] _cells = Array.Empty<GUIStyle>();
 
             // Sequential blue ramp: empty, then five steps of completion; the last is "complete".
@@ -566,6 +707,17 @@ namespace TCGCardTracker
             {
                 var t = new Texture2D(1, 1) { hideFlags = HideFlags.HideAndDontSave };
                 t.SetPixel(0, 0, c);
+                t.Apply();
+                return t;
+            }
+
+            /// <summary>A 6x6 frame (2 px border, clear middle), stretched as a 9-slice.</summary>
+            private static Texture2D OutlineTex(Color c)
+            {
+                var t = new Texture2D(6, 6) { hideFlags = HideFlags.HideAndDontSave, filterMode = FilterMode.Point };
+                for (int y = 0; y < 6; y++)
+                    for (int x = 0; x < 6; x++)
+                        t.SetPixel(x, y, x < 2 || x > 3 || y < 2 || y > 3 ? c : Color.clear);
                 t.Apply();
                 return t;
             }
@@ -594,6 +746,14 @@ namespace TCGCardTracker
                 Row = new GUIStyle(skin.label) { fontSize = 13, alignment = TextAnchor.MiddleLeft };
                 Row.normal.textColor = Color.white;
                 RowStrong = new GUIStyle(Row) { fontStyle = FontStyle.Bold, fontSize = 14 };
+                RowBody = new GUIStyle(Body) { alignment = TextAnchor.MiddleLeft };
+                RowMuted = new GUIStyle(Muted) { alignment = TextAnchor.MiddleLeft };
+                Popup = new GUIStyle(GUIStyle.none) { padding = new RectOffset(6, 6, 6, 6) };
+                Popup.normal.background = Tex(new Color32(0x1a, 0x1a, 0x19, 0xff));
+                Placeholder = new GUIStyle(GUIStyle.none);
+                Placeholder.normal.background = Tex(new Color32(0x26, 0x26, 0x24, 0xff));
+                Outline = new GUIStyle(GUIStyle.none) { border = new RectOffset(2, 2, 2, 2) };
+                Outline.normal.background = OutlineTex(new Color32(0x2a, 0x78, 0xd6, 0xff));
 
                 _cells = new GUIStyle[Heat.Length];
                 for (int i = 0; i < Heat.Length; i++)

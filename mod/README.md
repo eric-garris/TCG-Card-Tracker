@@ -7,6 +7,9 @@ Press **F7** in your shop to open it.
   **ungraded and at each grade 1–10**, plus "any grade" and "any form", with total copies.
 - Expand a set into editions (Basic … Full Art; Ghost White/Black), then into Non-foil / Foil.
 - Click any cell to list the missing (or owned) cards for it, with today's market price.
+- Each card in the list has a picture drawn by the game itself, the same way the binder draws it,
+  with its edition border, rarity and foil. Hover a picture to enlarge it, or click it to pin it in
+  its own window (drag it anywhere, click the picture again or `x` to close).
 - It counts cards wherever they are: binders, displays and shelves, storage, decks, at grading,
   card boxes, in hand, donation boxes and pack openers. Each place can be switched off.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
@@ -22,7 +25,8 @@ Press **F7** in your shop to open it.
 3. Start the game, load your shop, and press **F7**.
 
 Settings are in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
-window size (`UiScale`), copy counts, which places are counted, and `LiveShelves` there.
+window size (`UiScale`), copy counts, card pictures (`CardPictures`), which places are counted,
+and `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.
 
