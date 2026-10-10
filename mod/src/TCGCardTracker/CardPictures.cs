@@ -338,34 +338,35 @@ namespace TCGCardTracker
             }
         }
 
+        /// <summary>Where the card face is: its centre, and vectors along its full width and height.</summary>
+        private struct Face
+        {
+            public Vector3 Center, Right, Up;
+            public string Name;
+        }
+
         /// <summary>Points the camera square at the card face and renders it into the texture.</summary>
         private bool Render(Stage stage, RenderTexture target)
         {
             if (_camera == null || !stage.Alive) return false;
-            var face = FaceRect(stage.Group.m_CardUI);
-            if (face == null) return RenderFailed();
-
-            var c = new Vector3[4];
-            face.GetWorldCorners(c);
-            Vector3 right = c[3] - c[0], up = c[1] - c[0];
-            float w = right.magnitude, h = up.magnitude;
-            if (w <= 0f || h <= 0f) return RenderFailed();
-            _renderFailures = 0;
             EnsureShown(stage);
             SetLayer(stage.Group.gameObject);
+            if (!FindFace(stage, out var face)) return RenderFailed(stage);
+            _renderFailures = 0;
+
+            float w = face.Right.magnitude, h = face.Up.magnitude;
             // UI faces the camera that looks along the canvas's forward; working it out from the
-            // corners keeps the picture upright and unmirrored however the prefab is rotated.
-            var forward = Vector3.Cross(right, up).normalized;
-            var center = (c[0] + c[2]) * 0.5f;
+            // face's own axes keeps the picture unmirrored however the card is rotated or flipped.
+            var forward = Vector3.Cross(face.Right, face.Up).normalized;
             float dist = Mathf.Max(w, h) * 2f;
 
             if (!_loggedFrame)
             {
                 _loggedFrame = true;
-                Plugin.Log.LogInfo($"Card pictures: framing '{face.name}' ({w:0.###} x {h:0.###}) at {center}, facing {forward}.");
+                Plugin.Log.LogInfo($"Card pictures: framing {face.Name} ({w:0.####} x {h:0.####}) at {face.Center}, facing {forward}.");
             }
 
-            _camera.transform.SetPositionAndRotation(center - forward * dist, Quaternion.LookRotation(forward, up));
+            _camera.transform.SetPositionAndRotation(face.Center - forward * dist, Quaternion.LookRotation(forward, face.Up));
             _camera.nearClipPlane = dist * 0.5f;
             _camera.farClipPlane = dist * 1.5f;
             _camera.targetTexture = target;
@@ -381,36 +382,92 @@ namespace TCGCardTracker
                 _camera.targetTexture = null;
                 RenderTexture.active = active;
             }
-            if (_checks < PictureChecks) CheckPicture(stage, target, face);
+            if (_checks < PictureChecks) CheckPicture(stage, target, face.Name);
             return true;
         }
 
-        private bool RenderFailed()
+        private bool RenderFailed(Stage stage)
         {
-            if (++_renderFailures >= 20) Disable("the card face could not be found to frame it");
+            if (_renderFailures++ == 0) Plugin.LogOnce("pictures-describe:noface", "Card pictures: could not find the card face to frame.\n" + Describe(stage, "none"));
+            if (_renderFailures >= 20) Disable("the card face could not be found to frame it");
             return false;
         }
 
-        /// <summary>The rectangle of the card face: the first card-shaped one of the card's UI rects.</summary>
-        private static RectTransform? FaceRect(CardUI ui)
+        /// <summary>
+        /// The card face: the first card-shaped rectangle among the card's main UI parts, else the
+        /// outline of everything visible on the card. A sideways rectangle is turned upright.
+        /// </summary>
+        private bool FindFace(Stage stage, out Face face)
         {
-            var candidates = new[]
+            var ui = stage.Group.m_CardUI;
+            var named = new (string name, RectTransform? rt)[]
             {
-                ui.m_CardFront != null ? ui.m_CardFront.transform as RectTransform : null,
-                ui.transform as RectTransform,
-                ui.m_CardBGImage != null ? ui.m_CardBGImage.rectTransform : null,
-                ui.m_CardBorderImage != null ? ui.m_CardBorderImage.rectTransform : null,
+                ("m_CardFront", ui.m_CardFront != null ? ui.m_CardFront.transform as RectTransform : null),
+                ("CardUI", ui.transform as RectTransform),
+                ("m_CardBGImage", ui.m_CardBGImage != null ? ui.m_CardBGImage.rectTransform : null),
+                ("m_CardBorderImage", ui.m_CardBorderImage != null ? ui.m_CardBorderImage.rectTransform : null),
+                ("m_CardBorderMask", ui.m_CardBorderMask != null ? ui.m_CardBorderMask.rectTransform : null),
+                ("m_CardFrontImage", ui.m_CardFrontImage != null ? ui.m_CardFrontImage.rectTransform : null),
             };
-            foreach (var rt in candidates)
+            var c = new Vector3[4];
+            foreach (var (name, rt) in named)
             {
                 if (rt == null) continue;
-                var size = Vector2.Scale(rt.rect.size, rt.lossyScale);
-                if (size.x <= 0f || size.y <= 0f) continue;
-                float aspect = size.x / size.y;
-                if (aspect > 0.55f && aspect < 0.9f) return rt;
+                rt.GetWorldCorners(c);
+                if (CardShaped((c[0] + c[2]) * 0.5f, c[3] - c[0], c[1] - c[0], $"'{rt.name}' ({name})", out face)) return true;
             }
-            Plugin.LogOnce("pictures-frame", "Card pictures: could not find the card face to frame.");
-            return null;
+
+            // Outline of the visible parts, measured in the plane of the card's canvas.
+            var plane = ui.transform as RectTransform ?? ui.GetComponentInParent<Canvas>()?.transform as RectTransform;
+            if (plane != null)
+            {
+                plane.GetWorldCorners(c);
+                Vector3 ax = (c[3] - c[0]).normalized, ay = (c[1] - c[0]).normalized;
+                if (ax.sqrMagnitude > 0f && ay.sqrMagnitude > 0f)
+                {
+                    float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+                    var origin = c[0];
+                    int parts = 0;
+                    foreach (var g in ui.GetComponentsInChildren<Graphic>(false))
+                    {
+                        if (!g.isActiveAndEnabled || g.color.a <= 0.01f) continue;
+                        g.rectTransform.GetWorldCorners(c);
+                        foreach (var p in c)
+                        {
+                            float x = Vector3.Dot(p - origin, ax), y = Vector3.Dot(p - origin, ay);
+                            minX = Mathf.Min(minX, x); maxX = Mathf.Max(maxX, x);
+                            minY = Mathf.Min(minY, y); maxY = Mathf.Max(maxY, y);
+                        }
+                        parts++;
+                    }
+                    if (parts > 0)
+                    {
+                        var center = origin + ax * ((minX + maxX) * 0.5f) + ay * ((minY + maxY) * 0.5f);
+                        if (CardShaped(center, ax * (maxX - minX), ay * (maxY - minY), $"the outline of {parts} visible parts", out face, anyShape: true)) return true;
+                    }
+                }
+            }
+            face = default;
+            return false;
+        }
+
+        /// <summary>A card-shaped (portrait) rectangle, or a landscape one turned upright.</summary>
+        private static bool CardShaped(Vector3 center, Vector3 right, Vector3 up, string name, out Face face, bool anyShape = false)
+        {
+            face = default;
+            float w = right.magnitude, h = up.magnitude;
+            if (w < 1e-6f || h < 1e-6f) return false;
+            float aspect = w / h;
+            if (aspect >= 1.1f && (anyShape || 1f / aspect > 0.55f))
+            {
+                // Lying on its side: the card's top is towards the rectangle's right. Turning the
+                // axes this way keeps the facing (and so the picture unmirrored).
+                face = new Face { Center = center, Right = -up, Up = right, Name = name + ", turned upright" };
+                return true;
+            }
+            if (!anyShape && (aspect <= 0.55f || aspect >= 0.9f)) return false;
+            face = new Face { Center = center, Right = right, Up = up, Name = name };
+            return true;
         }
 
         // ---------- Setup and teardown ----------
@@ -426,7 +483,9 @@ namespace TCGCardTracker
                 Disable("the game's 3D card was not found");
                 return false;
             }
-            _loader = LoadStreamTexture.m_Instance != null ? LoadStreamTexture.m_Instance : UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
+            _loader = LoadStreamTexture.m_Instance != null ? LoadStreamTexture.m_Instance
+                : CSingleton<LoadStreamTexture>.instance != null ? CSingleton<LoadStreamTexture>.instance
+                : UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
             _layer = SpareLayer();
             Plugin.Log.LogInfo($"Card pictures: using '{prefab.name}' from {source}, layer {_layer}, art loader {(_loader != null ? "found" : "not found")}.");
 
@@ -483,7 +542,7 @@ namespace TCGCardTracker
         // ---------- Diagnostics ----------
 
         /// <summary>Saves the picture next to the mod and logs how much of it shows a card, plus the card's make-up.</summary>
-        private void CheckPicture(Stage stage, RenderTexture rt, RectTransform face)
+        private void CheckPicture(Stage stage, RenderTexture rt, string face)
         {
             int n = ++_checks;
             Texture2D? tex = null;
@@ -532,12 +591,12 @@ namespace TCGCardTracker
             }
         }
 
-        private string Describe(Stage stage, RectTransform face)
+        private string Describe(Stage stage, string face)
         {
             var sb = new StringBuilder();
             var cam = _camera;
             sb.Append("Card pictures: diagnostics. Color space ").Append(QualitySettings.activeColorSpace)
-              .Append(", picture layer ").Append(_layer).Append(", face '").Append(face.name).Append("'.\n");
+              .Append(", picture layer ").Append(_layer).Append(", face ").Append(face).Append(".\n");
             if (cam != null)
                 sb.Append("  camera at ").Append(cam.transform.position).Append(" looking ").Append(cam.transform.forward)
                   .Append(", ortho size ").Append(cam.orthographicSize.ToString("0.####"))

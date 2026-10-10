@@ -5,7 +5,7 @@
     <AssemblyName>TCGCardTracker</AssemblyName>
     <RootNamespace>TCGCardTracker</RootNamespace>
     <Product>TCG Card Tracker</Product>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
