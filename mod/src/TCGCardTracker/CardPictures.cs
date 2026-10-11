@@ -329,7 +329,8 @@ namespace TCGCardTracker
         {
             try
             {
-                var list = _loader != null ? _loader.m_CurrentLoadingFileNameList : null;
+                if (_loader == null) return false;
+                var list = typeof(LoadStreamTexture).GetField("m_CurrentLoadingFileNameList", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(_loader) as System.Collections.ICollection;
                 return list != null && list.Count > 0;
             }
             catch
@@ -406,8 +407,8 @@ namespace TCGCardTracker
                 ("CardUI", ui.transform as RectTransform),
                 ("m_CardBGImage", ui.m_CardBGImage != null ? ui.m_CardBGImage.rectTransform : null),
                 ("m_CardBorderImage", ui.m_CardBorderImage != null ? ui.m_CardBorderImage.rectTransform : null),
-                ("m_CardBorderMask", ui.m_CardBorderMask != null ? ui.m_CardBorderMask.rectTransform : null),
-                ("m_CardFrontImage", ui.m_CardFrontImage != null ? ui.m_CardFrontImage.rectTransform : null),
+                ("m_CardBorderMask", ImageField(ui, "m_CardBorderMask")?.rectTransform),
+                ("m_CardFrontImage", ImageField(ui, "m_CardFrontImage")?.rectTransform),
             };
             var c = new Vector3[4];
             foreach (var (name, rt) in named)
@@ -451,6 +452,24 @@ namespace TCGCardTracker
             return false;
         }
 
+        /// <summary>
+        /// Reads an Image field by reflection. The reference assemblies we build against make every
+        /// member public, but some are private in the game, and a direct access to one of those
+        /// fails the whole method when it loads.
+        /// </summary>
+        private static Image? ImageField(CardUI ui, string name)
+        {
+            try
+            {
+                var img = typeof(CardUI).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(ui) as Image;
+                return img != null ? img : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         /// <summary>A card-shaped (portrait) rectangle, or a landscape one turned upright.</summary>
         private static bool CardShaped(Vector3 center, Vector3 right, Vector3 up, string name, out Face face, bool anyShape = false)
         {
@@ -483,9 +502,7 @@ namespace TCGCardTracker
                 Disable("the game's 3D card was not found");
                 return false;
             }
-            _loader = LoadStreamTexture.m_Instance != null ? LoadStreamTexture.m_Instance
-                : CSingleton<LoadStreamTexture>.instance != null ? CSingleton<LoadStreamTexture>.instance
-                : UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
+            _loader = LoadStreamTexture.m_Instance != null ? LoadStreamTexture.m_Instance : UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
             _layer = SpareLayer();
             Plugin.Log.LogInfo($"Card pictures: using '{prefab.name}' from {source}, layer {_layer}, art loader {(_loader != null ? "found" : "not found")}.");
 
