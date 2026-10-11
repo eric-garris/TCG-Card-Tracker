@@ -45,6 +45,8 @@ namespace TCGCardTracker
             public long Key = -1;
             public int SetFrame;
             public float SetTime;
+            /// <summary>Named parts of the card, looked up once.</summary>
+            public readonly Dictionary<string, RectTransform?> Parts = new Dictionary<string, RectTransform?>();
             /// <summary>Large stages: frame of the last render of the current card, or -1.</summary>
             public int RenderedFrame = -1;
 
@@ -77,6 +79,7 @@ namespace TCGCardTracker
         private bool _disabled;
         private int _failures;
         private int _renderFailures;
+        private AdditionalCanvasShaderChannels _channels;
         private readonly List<Transform> _transforms = new List<Transform>();
         private bool _loggedFrame;
         private LoadStreamTexture? _loader;
@@ -403,6 +406,9 @@ namespace TCGCardTracker
             var ui = stage.Group.m_CardUI;
             var named = new (string name, RectTransform? rt)[]
             {
+                // Card-sized parts of the game's card: a full-card overlay and the click area.
+                ("full-card overlay", Descendant(stage, "LockedImage")),
+                ("click area", Descendant(stage, "BtnArea")),
                 ("m_CardFront", ui.m_CardFront != null ? ui.m_CardFront.transform as RectTransform : null),
                 ("CardUI", ui.transform as RectTransform),
                 ("m_CardBGImage", ui.m_CardBGImage != null ? ui.m_CardBGImage.rectTransform : null),
@@ -450,6 +456,21 @@ namespace TCGCardTracker
             }
             face = default;
             return false;
+        }
+
+        /// <summary>A part of the card's UI found by name (on or off: only its rectangle is used).</summary>
+        private static RectTransform? Descendant(Stage stage, string name)
+        {
+            if (stage.Parts.TryGetValue(name, out var found) && found != null) return found;
+            found = null;
+            foreach (var rt in stage.Group.m_CardUI.GetComponentsInChildren<RectTransform>(true))
+                if (rt.name == name)
+                {
+                    found = rt;
+                    break;
+                }
+            stage.Parts[name] = found;
+            return found;
         }
 
         /// <summary>
@@ -504,7 +525,8 @@ namespace TCGCardTracker
             }
             _loader = LoadStreamTexture.m_Instance != null ? LoadStreamTexture.m_Instance : UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
             _layer = SpareLayer();
-            Plugin.Log.LogInfo($"Card pictures: using '{prefab.name}' from {source}, layer {_layer}, art loader {(_loader != null ? "found" : "not found")}.");
+            _channels = GameCardChannels(out string canvasSource);
+            Plugin.Log.LogInfo($"Card pictures: using '{prefab.name}' from {source}, layer {_layer}, art loader {(_loader != null ? "found" : "not found")}, canvas channels {_channels} ({canvasSource}).");
 
             var camGo = new GameObject("TCGCardTracker.PictureCamera");
             _camera = camGo.AddComponent<Camera>();
@@ -523,9 +545,9 @@ namespace TCGCardTracker
             for (int i = 0; i < LargeStageCount; i++)
             {
                 _largeStages[i] = NewStage(prefab, n++);
-                _largeTex[i] = NewTexture(LargeTexHeight, 16, "TCGCardTracker picture");
+                _largeTex[i] = NewTexture(LargeTexHeight, 24, "TCGCardTracker picture");
             }
-            _work = NewTexture(ThumbTexHeight * 2, 16, "TCGCardTracker work");
+            _work = NewTexture(ThumbTexHeight * 2, 24, "TCGCardTracker work");
             _awake = true;
             return true;
         }
@@ -685,6 +707,12 @@ namespace TCGCardTracker
             root.transform.position = StageOrigin + new Vector3(index * StageSpacing, 0f, 0f);
             var group = UnityEngine.Object.Instantiate(prefab, root.transform, false);
             group.m_IgnoreCulling = true;
+            // The game's cards draw through the canvas of whatever holds them (binder page, shelf);
+            // on its own the copy has none and draws nothing. World space keeps its transform as is.
+            var canvas = group.gameObject.GetComponent<Canvas>();
+            if (canvas == null) canvas = group.gameObject.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.additionalShaderChannels |= _channels;
             group.gameObject.SetActive(true);
             SetLayer(group.gameObject);
             root.SetActive(true);
@@ -699,6 +727,36 @@ namespace TCGCardTracker
                 Images = group.GetComponentsInChildren<Image>(true),
                 CreatedFrame = Time.frameCount,
             };
+        }
+
+        /// <summary>
+        /// The extra mesh data (normals, tangents, extra UVs) the canvas holding the game's own cards
+        /// passes to shaders; the foil shaders may need it. Everything, if no such canvas is found.
+        /// </summary>
+        private static AdditionalCanvasShaderChannels GameCardChannels(out string source)
+        {
+            const AdditionalCanvasShaderChannels all = AdditionalCanvasShaderChannels.TexCoord1 | AdditionalCanvasShaderChannels.TexCoord2
+                | AdditionalCanvasShaderChannels.TexCoord3 | AdditionalCanvasShaderChannels.Normal | AdditionalCanvasShaderChannels.Tangent;
+            try
+            {
+                foreach (var g in Resources.FindObjectsOfTypeAll<Card3dUIGroup>())
+                {
+                    if (g == null || !g.gameObject.scene.IsValid() || g.transform.root.name.StartsWith("TCGCardTracker", StringComparison.Ordinal)) continue;
+                    for (var t = g.transform; t != null; t = t.parent)
+                    {
+                        var canvas = t.GetComponent<Canvas>();
+                        if (canvas == null) continue;
+                        source = $"from '{canvas.name}', {canvas.renderMode}";
+                        return canvas.additionalShaderChannels;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pictures-canvas", "Card pictures: could not look at the game's card canvas: " + e.Message);
+            }
+            source = "no game card canvas found, using all";
+            return all;
         }
 
         /// <summary>Moves the card and everything under it (text adds pieces as it changes) to the picture layer.</summary>
