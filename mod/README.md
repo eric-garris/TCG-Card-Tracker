@@ -17,8 +17,12 @@ Press **F7** in your shop to open it.
   its own window (drag it anywhere, click the picture again or `x` to close).
 - It counts cards wherever they are: binders, displays and shelves, storage, decks, at grading,
   card boxes, in hand, donation boxes and pack openers. Each place can be switched off.
+- **New for your collection:** after you open packs, a short popup lists the cards that are new to
+  you (no copy anywhere you count) or that you now own at a better grade than before. It appears
+  once the opening screen closes, so it never spoils a reveal. Turn it off with `NewCardPopup`.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
-- It is read-only: it never changes your save or your cards.
+- It never changes your save or your cards. The new-card popup is the only part that hooks the
+  game's code (pack opening), and it only reads; with `NewCardPopup` off the hook isn't installed.
 
 ## Install
 
@@ -30,8 +34,8 @@ Press **F7** in your shop to open it.
 3. Start the game, load your shop, and press **F7**.
 
 Settings are in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
-window size (`UiScale`), copy counts, card pictures (`CardPictures`), which places are counted,
-and `LiveShelves` there.
+window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
+(`NewCardPopup`), which places are counted, and `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.
 

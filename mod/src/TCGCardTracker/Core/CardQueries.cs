@@ -11,6 +11,18 @@ namespace TCGCardTracker.Core
         public int KeptCol;
     }
 
+    /// <summary>A card that became new to the collection, or reached a better grade than any copy owned before.</summary>
+    public struct Gain
+    {
+        public Card Card;
+        /// <summary>True when no copy was owned before; false when the best copy got better.</summary>
+        public bool IsNew;
+        /// <summary>The best column now owned (0 = ungraded, 1-10 = grade, Collection.ColOther = other grade).</summary>
+        public int BestCol;
+        /// <summary>Copies gained in BestCol.</summary>
+        public int Copies;
+    }
+
     public static class CardQueries
     {
         /// <summary>The grid columns a column covers.</summary>
@@ -24,6 +36,27 @@ namespace TCGCardTracker.Core
             for (int c = col.Value == Column.AnyForm ? 0 : 1; c < Collection.Cols; c++) yield return c;
         }
 
+        /// <summary>How good a column's copy is: ungraded, then a modded grade, then grades 1-10.</summary>
+        private static int Rank(int col) => col == 0 ? 0 : col == Collection.ColOther ? 1 : col + 1;
+
+        /// <summary>
+        /// Compares two snapshots of combined totals: cards with no copy before and some now, and cards whose
+        /// best copy is now a better grade than before.
+        /// </summary>
+        public static List<Gain> Gains(Catalog catalog, int[] before, int[] after)
+        {
+            var gains = new List<Gain>();
+            foreach (var card in catalog.Cards)
+            {
+                int was = SpareOf(before, card, Column.Any).KeptCol;
+                int now = SpareOf(after, card, Column.Any).KeptCol;
+                if (now < 0 || (was >= 0 && Rank(now) <= Rank(was))) continue;
+                int b = card.Index * Collection.Cols + now;
+                gains.Add(new Gain { Card = card, IsNew = was < 0, BestCol = now, Copies = Math.Max(1, after[b] - before[b]) });
+            }
+            return gains;
+        }
+
         /// <summary>Spare copies of a card within a column, keeping its single best copy.</summary>
         public static Spare SpareOf(int[] totals, Card card, Column col)
         {
@@ -34,7 +67,7 @@ namespace TCGCardTracker.Core
                 int n = totals[b + c];
                 if (n == 0) continue;
                 copies += n;
-                int rank = c == 0 ? 0 : c == Collection.ColOther ? 1 : c + 1;
+                int rank = Rank(c);
                 if (rank > keptRank)
                 {
                     keptRank = rank;
