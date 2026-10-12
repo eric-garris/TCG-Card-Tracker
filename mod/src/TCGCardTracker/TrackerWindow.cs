@@ -26,6 +26,13 @@ namespace TCGCardTracker
         private const float LargeHeight = 420f;
         private const float LargeWidth = LargeHeight * CardPictures.Aspect;
 
+        private enum ListMode { Missing, Owned, Spares }
+
+        private enum SortBy { Number, Name, Price, Rarity }
+
+        /// <summary>Short place names for the "Where" column and cell hover text, indexed by Loc.</summary>
+        private static readonly string[] PlaceNames = { "Binder", "Display", "Storage", "Deck", "Grading", "Box", "Hand", "Donation", "Opener" };
+
         private static readonly Column[] GridColumns =
         {
             Column.Ungraded,
@@ -69,11 +76,18 @@ namespace TCGCardTracker
         private string? _selGroup;
         private int _selFoil = -1; // -1 all, 0 non-foil, 1 foil
         private Column _selCol = Column.Ungraded;
-        private bool _showOwned;
+        private ListMode _mode;
+        private string _search = "";
+        private SortBy _sort;
 
         // Caches, rebuilt when data or filters change.
         private List<GridRow>? _rows;
         private List<Card>? _list;
+        /// <summary>Per row of _list: one copy's price, or the spare copies' value in Spares mode.</summary>
+        private float?[] _listValues = Array.Empty<float?>();
+        private int _spareCopies;
+        private float _spareValue;
+        private readonly Dictionary<int, string> _whereCache = new Dictionary<int, string>();
         private string _summary = "";
 
         private sealed class GridRow
@@ -196,6 +210,7 @@ namespace TCGCardTracker
             _totals = _collection.Combine(Plugin.IncludedLocations());
             _rows = null;
             _list = null;
+            _whereCache.Clear();
         }
 
         // ---------- Data helpers ----------
@@ -259,6 +274,7 @@ namespace TCGCardTracker
                     else gradedValue += p.Value * n;
                 }
             }
+            var included = Plugin.IncludedLocations();
             _summary = $"Collected {any.Owned:N0} / {any.Total:N0} ({Pct(any.Owned, any.Total)})   ·   Graded copies {graded.Copies:N0}   ·   Gem Mint {gem.Copies:N0}   ·   Value {GameReader.PriceString(ungradedValue + gradedValue)} ({GameReader.PriceString(ungradedValue)} ungraded, {GameReader.PriceString(gradedValue)} graded)";
             foreach (var row in rows)
             {
@@ -270,6 +286,7 @@ namespace TCGCardTracker
                     string where = row.Depth > 0 ? row.Group + " " : "";
                     string foil = row.Foil == 1 ? "Foil " : row.Foil == 0 ? "Non-foil " : "";
                     string tip = $"{row.Set.Name} {where}{foil}· {GridColumns[i].LongLabel}: {a.Owned:N0} of {a.Total:N0} cards ({Pct(a.Owned, a.Total)}), {a.Copies:N0} copies";
+                    if (a.Copies > 0) tip += " · " + Places(_collection!.CopiesByLoc(Filtered(row.Set, row.Group, row.Foil), GridColumns[i], included));
                     row.Contents[i] = new GUIContent(text, tip);
                 }
             }
@@ -280,18 +297,82 @@ namespace TCGCardTracker
         private List<Card> CardList()
         {
             if (_list != null) return _list;
-            var list = new List<Card>();
+            var rows = new List<(Card card, float? value)>();
+            _spareCopies = 0;
+            _spareValue = 0f;
             if (_selSet != null)
             {
+                int priceGrade = PriceGrade();
                 foreach (var c in Filtered(_selSet, _selGroup, _selFoil))
                 {
+                    if (!CardQueries.Matches(c, _search)) continue;
+                    if (_mode == ListMode.Spares)
+                    {
+                        var spare = CardQueries.SpareOf(_totals, c, _selCol);
+                        if (spare.Copies == 0) continue;
+                        var card = c;
+                        float value = CardQueries.SpareValue(_totals, c, _selCol, col => col <= 10 ? GameReader.MarketPrice(card, col) : null);
+                        _spareCopies += spare.Copies;
+                        _spareValue += value;
+                        rows.Add((c, value));
+                        continue;
+                    }
                     bool owned = Aggregate.Copies(_totals, c, _selCol) > 0;
-                    if (owned == _showOwned) list.Add(c);
+                    if (owned == (_mode == ListMode.Owned)) rows.Add((c, GameReader.MarketPrice(c, priceGrade)));
                 }
+            }
+            rows.Sort((x, y) =>
+            {
+                int d = 0;
+                switch (_sort)
+                {
+                    case SortBy.Name: d = string.Compare(x.card.Name, y.card.Name, StringComparison.OrdinalIgnoreCase); break;
+                    case SortBy.Price: d = (y.value ?? -1f).CompareTo(x.value ?? -1f); break;
+                    case SortBy.Rarity: d = y.card.Tier.CompareTo(x.card.Tier); break;
+                }
+                return d != 0 ? d : x.card.Index.CompareTo(y.card.Index);
+            });
+            var list = new List<Card>(rows.Count);
+            _listValues = new float?[rows.Count];
+            for (int i = 0; i < rows.Count; i++)
+            {
+                list.Add(rows[i].card);
+                _listValues[i] = rows[i].value;
             }
             _list = list;
             return list;
         }
+
+        /// <summary>The grade whose price the list shows: the selected grade, else ungraded.</summary>
+        private int PriceGrade() => _selCol.Value >= 0 && _selCol.Value <= 10 ? _selCol.Value : 0;
+
+        /// <summary>"Binder 2  Display 1": copies per place, in place order.</summary>
+        private static string Places(int[] byLoc)
+        {
+            var sb = new StringBuilder();
+            for (int l = 0; l < byLoc.Length; l++)
+            {
+                if (byLoc[l] == 0) continue;
+                if (sb.Length > 0) sb.Append("  ");
+                sb.Append(l < PlaceNames.Length ? PlaceNames[l] : "Other").Append(' ').Append(byLoc[l].ToString("N0"));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>Where every copy of a card sits, in any form, across the counted places.</summary>
+        private string Where(Card c)
+        {
+            if (_whereCache.TryGetValue(c.Index, out var text)) return text;
+            text = Places(_collection!.CopiesByLoc(new[] { c }, Column.Any, Plugin.IncludedLocations()));
+            if (text.Length == 0) text = "-";
+            _whereCache[c.Index] = text;
+            return text;
+        }
+
+        private static string ModeHint(ListMode m) =>
+            m == ListMode.Missing ? "Cards you don't own in this condition" :
+            m == ListMode.Owned ? "Cards you own in this condition" :
+            "Copies beyond the best one you own in this condition: safe to sell or display";
 
         private static string Pct(int owned, int total)
         {
@@ -469,7 +550,7 @@ namespace TCGCardTracker
                         _selGroup = row.Group;
                         _selFoil = row.Foil;
                         _selCol = GridColumns[i];
-                        _showOwned = false;
+                        _mode = ListMode.Missing;
                         _list = null;
                         _listScroll = Vector2.zero;
                         _tab = 1;
@@ -531,22 +612,52 @@ namespace TCGCardTracker
                     _list = null;
                 }
             GUILayout.Space(12);
-            if (GUILayout.Toggle(!_showOwned, "Missing", Styles.Chip) && _showOwned)
+            foreach (ListMode m in Enum.GetValues(typeof(ListMode)))
+                if (GUILayout.Toggle(_mode == m, new GUIContent(m.ToString(), ModeHint(m)), Styles.Chip) && _mode != m)
+                {
+                    _mode = m;
+                    _list = null;
+                }
+            GUILayout.FlexibleSpace();
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            GUILayout.Label("Search:", Styles.Muted, GUILayout.Width(60));
+            string search = GUILayout.TextField(_search, 40, GUILayout.Width(200));
+            if (search != _search)
             {
-                _showOwned = false;
+                _search = search;
+                _list = null;
+                _listScroll = Vector2.zero;
+            }
+            // Always drawn (greyed out when empty): typing must not change the control count mid-event.
+            bool wasEnabled = GUI.enabled;
+            GUI.enabled = wasEnabled && _search.Length > 0;
+            if (GUILayout.Button("x", GUILayout.Width(24)))
+            {
+                _search = "";
                 _list = null;
             }
-            if (GUILayout.Toggle(_showOwned, "Owned", Styles.Chip) && !_showOwned)
-            {
-                _showOwned = true;
-                _list = null;
-            }
+            GUI.enabled = wasEnabled;
+            GUILayout.Space(12);
+            GUILayout.Label("Sort:", Styles.Muted, GUILayout.Width(36));
+            foreach (SortBy by in Enum.GetValues(typeof(SortBy)))
+                if (GUILayout.Toggle(_sort == by, by == SortBy.Price && _mode == ListMode.Spares ? "Spare value" : by.ToString(), Styles.Chip) && _sort != by)
+                {
+                    _sort = by;
+                    _list = null;
+                    _listScroll = Vector2.zero;
+                }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
             var list = CardList();
-            int priceGrade = _selCol.Value >= 0 && _selCol.Value <= 10 ? _selCol.Value : 0;
-            GUILayout.Label($"{list.Count:N0} {(_showOwned ? "owned" : "missing")} · {_selSet.Name}{(_selGroup != null ? " · " + _selGroup : "")}{(_selFoil == 1 ? " · Foil" : _selFoil == 0 ? " · Non-foil" : "")} · {_selCol.LongLabel}", Styles.Body);
+            int priceGrade = PriceGrade();
+            bool spares = _mode == ListMode.Spares;
+            string count = spares
+                ? $"{list.Count:N0} cards with spares ({_spareCopies:N0} copies, worth {GameReader.PriceString(_spareValue)})"
+                : $"{list.Count:N0} {(_mode == ListMode.Owned ? "owned" : "missing")}";
+            GUILayout.Label($"{count} · {_selSet.Name}{(_selGroup != null ? " · " + _selGroup : "")}{(_selFoil == 1 ? " · Foil" : _selFoil == 0 ? " · Non-foil" : "")} · {_selCol.LongLabel}", Styles.Body);
 
             bool pictures = _showPictures;
             float rowHeight = pictures ? ThumbHeight + 4f : TextRowHeight;
@@ -554,10 +665,11 @@ namespace TCGCardTracker
             GUILayout.BeginHorizontal();
             if (pictures) GUILayout.Space(ThumbWidth + 8f);
             GUILayout.Label("#", Styles.Header, GUILayout.Width(44));
-            GUILayout.Label("Card", Styles.Header, GUILayout.Width(300));
-            GUILayout.Label("Rarity", Styles.Header, GUILayout.Width(90));
-            GUILayout.Label("Owned as", Styles.Header, GUILayout.Width(260));
-            GUILayout.Label(priceGrade > 0 ? $"Price (G{priceGrade})" : "Price", Styles.Header, GUILayout.Width(110));
+            GUILayout.Label("Card", Styles.Header, GUILayout.Width(260));
+            GUILayout.Label("Rarity", Styles.Header, GUILayout.Width(80));
+            GUILayout.Label("Owned as", Styles.Header, GUILayout.Width(220));
+            GUILayout.Label("Where", Styles.Header, GUILayout.Width(200));
+            GUILayout.Label(spares ? "Spares" : priceGrade > 0 ? $"Price (G{priceGrade})" : "Price", Styles.Header, GUILayout.Width(130));
             GUILayout.EndHorizontal();
 
             _listScroll = GUILayout.BeginScrollView(_listScroll);
@@ -570,21 +682,28 @@ namespace TCGCardTracker
             for (int i = first; i < last; i++)
             {
                 var c = list[i];
-                var p = GameReader.MarketPrice(c, priceGrade);
+                var p = _listValues[i];
                 GUILayout.BeginHorizontal(height);
                 if (pictures) DrawThumbnail(c);
                 GUILayout.Label(c.Num.ToString("000"), Styles.RowMuted, GUILayout.Width(44), height);
-                GUILayout.Label(c.Label, Styles.RowBody, GUILayout.Width(300), height);
-                GUILayout.Label(c.Tier.ToString(), Styles.RowMuted, GUILayout.Width(90), height);
-                GUILayout.Label(OwnedAs(c), Styles.RowBody, GUILayout.Width(260), height);
-                GUILayout.Label(p.HasValue ? GameReader.PriceString(p.Value) : "-", Styles.RowBody, GUILayout.Width(110), height);
+                GUILayout.Label(c.Label, Styles.RowBody, GUILayout.Width(260), height);
+                GUILayout.Label(c.Tier.ToString(), Styles.RowMuted, GUILayout.Width(80), height);
+                GUILayout.Label(OwnedAs(c), Styles.RowBody, GUILayout.Width(220), height);
+                GUILayout.Label(Where(c), Styles.RowBody, GUILayout.Width(200), height);
+                string price = p.HasValue && (p.Value > 0f || !spares) ? GameReader.PriceString(p.Value) : "-";
+                if (spares) price = $"x{CardQueries.SpareOf(_totals, c, _selCol).Copies}  {price}";
+                GUILayout.Label(price, Styles.RowBody, GUILayout.Width(130), height);
                 GUILayout.EndHorizontal();
             }
             if (last < list.Count) GUILayout.Space((list.Count - last) * rowHeight);
             GUILayout.EndScrollView();
             if (Event.current.type == EventType.Repaint) _listViewHeight = GUILayoutUtility.GetLastRect().height;
-            if (pictures) GUILayout.Label("Hover a picture to enlarge it, click it to pin it.", Styles.Muted);
-            else if (Plugin.ShowPictures.Value && _pictures.Status.Length > 0) GUILayout.Label(_pictures.Status, Styles.Muted);
+            // Always one footer label, so the Layout and Repaint passes see the same controls.
+            string footer =
+                !string.IsNullOrEmpty(GUI.tooltip) ? GUI.tooltip :
+                pictures ? "Hover a picture to enlarge it, click it to pin it." :
+                Plugin.ShowPictures.Value ? _pictures.Status : "";
+            GUILayout.Label(footer, Styles.Muted);
         }
 
         // ---------- Card pictures ----------
