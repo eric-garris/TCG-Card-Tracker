@@ -584,6 +584,7 @@ namespace TCGCardTracker
             GUILayout.EndScrollView();
             if (Event.current.type == EventType.Repaint) _listViewHeight = GUILayoutUtility.GetLastRect().height;
             if (pictures) GUILayout.Label("Hover a picture to enlarge it, click it to pin it.", Styles.Muted);
+            else if (Plugin.ShowPictures.Value && _pictures.Status.Length > 0) GUILayout.Label(_pictures.Status, Styles.Muted);
         }
 
         // ---------- Card pictures ----------

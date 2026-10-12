@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using TCGCardTracker.Core;
 using UnityEngine;
 using UnityEngine.UI;
@@ -43,6 +44,8 @@ namespace TCGCardTracker
             public long Key = -1;
             public int SetFrame;
             public float SetTime;
+            /// <summary>Named parts of the card, looked up once.</summary>
+            public readonly Dictionary<string, RectTransform?> Parts = new Dictionary<string, RectTransform?>();
             /// <summary>Large stages: frame of the last render of the current card, or -1.</summary>
             public int RenderedFrame = -1;
 
@@ -75,12 +78,20 @@ namespace TCGCardTracker
         private bool _disabled;
         private int _failures;
         private int _renderFailures;
+        private AdditionalCanvasShaderChannels _channels;
         private readonly List<Transform> _transforms = new List<Transform>();
         private bool _loggedFrame;
         private LoadStreamTexture? _loader;
 
         /// <summary>False once the game's card renderer could not be used; the list then shows no pictures.</summary>
         public bool Available => !_disabled;
+
+        /// <summary>Why pictures are off, for the panel.</summary>
+        public string Status { get; private set; } = "";
+
+        /// <summary>The first few pictures of a session are checked, so a broken picture (e.g. after a game update) shows in the log.</summary>
+        private const int PictureChecks = 3;
+        private int _checks;
 
         // ---------- Requests from the window (OnGUI) ----------
 
@@ -258,11 +269,46 @@ namespace TCGCardTracker
             stage.SetFrame = Time.frameCount;
             stage.SetTime = Time.realtimeSinceStartup;
             stage.RenderedFrame = -1;
-            var ui = stage.Group.m_CardUI;
+            var group = stage.Group;
+            var ui = group.m_CardUI;
+
+            // The copy's own start-up can sign it up with the game's card manager again, which
+            // hides or simplifies cards far from the player (ours are far below the shop).
+            Card3dUISpawner.RemoveCardFromManager(group);
+            group.SetSimplifyCardDistanceCull(false);
+            group.SetVisibility(true);
+
             ui.SetCardUI(data);
-            stage.Group.EvaluateCardGrade(data);
-            ui.SetBrightness(1f);
+            group.EvaluateCardGrade(data);
             if (ui.m_IsFarDistanceCulled) ui.ResetFarDistanceCull();
+            HideExtras(stage);
+        }
+
+        /// <summary>Only the card face: no back, card count or "new" badge.</summary>
+        private static void HideExtras(Stage stage)
+        {
+            var group = stage.Group;
+            var ui = group.m_CardUI;
+            group.SetCardCountTextVisibility(false);
+            if (group.m_NewCardIndicator != null && group.m_NewCardIndicator.activeSelf) group.m_NewCardIndicator.SetActive(false);
+            if (group.m_CardBackMesh != null && group.m_CardBackMesh.activeSelf) group.m_CardBackMesh.SetActive(false);
+            if (ui.m_CardBack != null && ui.m_CardBack.activeSelf) ui.m_CardBack.SetActive(false);
+        }
+
+        /// <summary>Undoes anything that switched the card face off since it was set (culling, pooling).</summary>
+        private static void EnsureShown(Stage stage)
+        {
+            var group = stage.Group;
+            var ui = group.m_CardUI;
+            if (!group.gameObject.activeSelf)
+            {
+                Plugin.LogOnce("pictures-reactivate", "Card pictures: the card copy had been switched off; switching it back on.");
+                group.gameObject.SetActive(true);
+            }
+            if (!ui.gameObject.activeSelf) ui.gameObject.SetActive(true);
+            if (ui.m_CardFront != null && !ui.m_CardFront.activeSelf) ui.m_CardFront.SetActive(true);
+            if (ui.m_IsFarDistanceCulled) ui.ResetFarDistanceCull();
+            HideExtras(stage);
         }
 
         /// <summary>The card's UI has been rebuilt (one frame on) and its art has streamed in, or we gave up waiting.</summary>
@@ -285,7 +331,8 @@ namespace TCGCardTracker
         {
             try
             {
-                var list = _loader != null ? _loader.m_CurrentLoadingFileNameList : null;
+                if (_loader == null) return false;
+                var list = typeof(LoadStreamTexture).GetField("m_CurrentLoadingFileNameList", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(_loader) as System.Collections.ICollection;
                 return list != null && list.Count > 0;
             }
             catch
@@ -294,33 +341,35 @@ namespace TCGCardTracker
             }
         }
 
+        /// <summary>Where the card face is: its centre, and vectors along its full width and height.</summary>
+        private struct Face
+        {
+            public Vector3 Center, Right, Up;
+            public string Name;
+        }
+
         /// <summary>Points the camera square at the card face and renders it into the texture.</summary>
         private bool Render(Stage stage, RenderTexture target)
         {
             if (_camera == null || !stage.Alive) return false;
-            var face = FaceRect(stage.Group.m_CardUI);
-            if (face == null) return RenderFailed();
-
-            var c = new Vector3[4];
-            face.GetWorldCorners(c);
-            Vector3 right = c[3] - c[0], up = c[1] - c[0];
-            float w = right.magnitude, h = up.magnitude;
-            if (w <= 0f || h <= 0f) return RenderFailed();
-            _renderFailures = 0;
+            EnsureShown(stage);
             SetLayer(stage.Group.gameObject);
+            if (!FindFace(stage, out var face)) return RenderFailed(stage);
+            _renderFailures = 0;
+
+            float w = face.Right.magnitude, h = face.Up.magnitude;
             // UI faces the camera that looks along the canvas's forward; working it out from the
-            // corners keeps the picture upright and unmirrored however the prefab is rotated.
-            var forward = Vector3.Cross(right, up).normalized;
-            var center = (c[0] + c[2]) * 0.5f;
+            // face's own axes keeps the picture unmirrored however the card is rotated or flipped.
+            var forward = Vector3.Cross(face.Right, face.Up).normalized;
             float dist = Mathf.Max(w, h) * 2f;
 
             if (!_loggedFrame)
             {
                 _loggedFrame = true;
-                Plugin.Log.LogInfo($"Card pictures: framing '{face.name}' ({w:0.###} x {h:0.###}).");
+                Plugin.Log.LogInfo($"Card pictures: framing {face.Name} ({w:0.####} x {h:0.####}) at {face.Center}, facing {forward}.");
             }
 
-            _camera.transform.SetPositionAndRotation(center - forward * dist, Quaternion.LookRotation(forward, up));
+            _camera.transform.SetPositionAndRotation(face.Center - forward * dist, Quaternion.LookRotation(forward, face.Up));
             _camera.nearClipPlane = dist * 0.5f;
             _camera.farClipPlane = dist * 1.5f;
             _camera.targetTexture = target;
@@ -336,35 +385,128 @@ namespace TCGCardTracker
                 _camera.targetTexture = null;
                 RenderTexture.active = active;
             }
+            if (_checks < PictureChecks) CheckPicture(stage, target, face.Name);
             return true;
         }
 
-        private bool RenderFailed()
+        private bool RenderFailed(Stage stage)
         {
-            if (++_renderFailures >= 20) Disable("the card face could not be found to frame it");
+            if (_renderFailures++ == 0) Plugin.LogOnce("pictures-describe:noface", "Card pictures: could not find the card face to frame.\n" + Describe(stage, "none"));
+            if (_renderFailures >= 20) Disable("the card face could not be found to frame it");
             return false;
         }
 
-        /// <summary>The rectangle of the card face: the first card-shaped one of the card's UI rects.</summary>
-        private static RectTransform? FaceRect(CardUI ui)
+        /// <summary>
+        /// The card face: the first card-shaped rectangle among the card's main UI parts, else the
+        /// outline of everything visible on the card. A sideways rectangle is turned upright.
+        /// </summary>
+        private bool FindFace(Stage stage, out Face face)
         {
-            var candidates = new[]
+            var ui = stage.Group.m_CardUI;
+            var named = new (string name, RectTransform? rt)[]
             {
-                ui.m_CardFront != null ? ui.m_CardFront.transform as RectTransform : null,
-                ui.transform as RectTransform,
-                ui.m_CardBGImage != null ? ui.m_CardBGImage.rectTransform : null,
-                ui.m_CardBorderImage != null ? ui.m_CardBorderImage.rectTransform : null,
+                // Card-sized parts of the game's card: a full-card overlay and the click area.
+                ("full-card overlay", Descendant(stage, "LockedImage")),
+                ("click area", Descendant(stage, "BtnArea")),
+                ("m_CardFront", ui.m_CardFront != null ? ui.m_CardFront.transform as RectTransform : null),
+                ("CardUI", ui.transform as RectTransform),
+                ("m_CardBGImage", ui.m_CardBGImage != null ? ui.m_CardBGImage.rectTransform : null),
+                ("m_CardBorderImage", ui.m_CardBorderImage != null ? ui.m_CardBorderImage.rectTransform : null),
+                ("m_CardBorderMask", ImageField(ui, "m_CardBorderMask")?.rectTransform),
+                ("m_CardFrontImage", ImageField(ui, "m_CardFrontImage")?.rectTransform),
             };
-            foreach (var rt in candidates)
+            var c = new Vector3[4];
+            foreach (var (name, rt) in named)
             {
                 if (rt == null) continue;
-                var size = Vector2.Scale(rt.rect.size, rt.lossyScale);
-                if (size.x <= 0f || size.y <= 0f) continue;
-                float aspect = size.x / size.y;
-                if (aspect > 0.55f && aspect < 0.9f) return rt;
+                rt.GetWorldCorners(c);
+                if (CardShaped((c[0] + c[2]) * 0.5f, c[3] - c[0], c[1] - c[0], $"'{rt.name}' ({name})", out face)) return true;
             }
-            Plugin.LogOnce("pictures-frame", "Card pictures: could not find the card face to frame.");
-            return null;
+
+            // Outline of the visible parts, measured in the plane of the card's canvas.
+            var plane = ui.transform as RectTransform ?? ui.GetComponentInParent<Canvas>()?.transform as RectTransform;
+            if (plane != null)
+            {
+                plane.GetWorldCorners(c);
+                Vector3 ax = (c[3] - c[0]).normalized, ay = (c[1] - c[0]).normalized;
+                if (ax.sqrMagnitude > 0f && ay.sqrMagnitude > 0f)
+                {
+                    float minX = float.MaxValue, maxX = float.MinValue, minY = float.MaxValue, maxY = float.MinValue;
+                    var origin = c[0];
+                    int parts = 0;
+                    foreach (var g in ui.GetComponentsInChildren<Graphic>(false))
+                    {
+                        if (!g.isActiveAndEnabled || g.color.a <= 0.01f) continue;
+                        g.rectTransform.GetWorldCorners(c);
+                        foreach (var p in c)
+                        {
+                            float x = Vector3.Dot(p - origin, ax), y = Vector3.Dot(p - origin, ay);
+                            minX = Mathf.Min(minX, x); maxX = Mathf.Max(maxX, x);
+                            minY = Mathf.Min(minY, y); maxY = Mathf.Max(maxY, y);
+                        }
+                        parts++;
+                    }
+                    if (parts > 0)
+                    {
+                        var center = origin + ax * ((minX + maxX) * 0.5f) + ay * ((minY + maxY) * 0.5f);
+                        if (CardShaped(center, ax * (maxX - minX), ay * (maxY - minY), $"the outline of {parts} visible parts", out face, anyShape: true)) return true;
+                    }
+                }
+            }
+            face = default;
+            return false;
+        }
+
+        /// <summary>A part of the card's UI found by name (on or off: only its rectangle is used).</summary>
+        private static RectTransform? Descendant(Stage stage, string name)
+        {
+            if (stage.Parts.TryGetValue(name, out var found) && found != null) return found;
+            found = null;
+            foreach (var rt in stage.Group.m_CardUI.GetComponentsInChildren<RectTransform>(true))
+                if (rt.name == name)
+                {
+                    found = rt;
+                    break;
+                }
+            stage.Parts[name] = found;
+            return found;
+        }
+
+        /// <summary>
+        /// Reads an Image field by reflection. The reference assemblies we build against make every
+        /// member public, but some are private in the game, and a direct access to one of those
+        /// fails the whole method when it loads.
+        /// </summary>
+        private static Image? ImageField(CardUI ui, string name)
+        {
+            try
+            {
+                var img = typeof(CardUI).GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)?.GetValue(ui) as Image;
+                return img != null ? img : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>A card-shaped (portrait) rectangle, or a landscape one turned upright.</summary>
+        private static bool CardShaped(Vector3 center, Vector3 right, Vector3 up, string name, out Face face, bool anyShape = false)
+        {
+            face = default;
+            float w = right.magnitude, h = up.magnitude;
+            if (w < 1e-6f || h < 1e-6f) return false;
+            float aspect = w / h;
+            if (aspect >= 1.1f && (anyShape || 1f / aspect > 0.55f))
+            {
+                // Lying on its side: the card's top is towards the rectangle's right. Turning the
+                // axes this way keeps the facing (and so the picture unmirrored).
+                face = new Face { Center = center, Right = -up, Up = right, Name = name + ", turned upright" };
+                return true;
+            }
+            if (!anyShape && (aspect <= 0.55f || aspect >= 0.9f)) return false;
+            face = new Face { Center = center, Right = right, Up = up, Name = name };
+            return true;
         }
 
         // ---------- Setup and teardown ----------
@@ -374,15 +516,16 @@ namespace TCGCardTracker
             if (_camera != null && AllAlive()) return true;
             Teardown(keepThumbs: true);
 
-            var spawner = UnityEngine.Object.FindObjectOfType<Card3dUISpawner>();
-            Card3dUIGroup? prefab = spawner != null ? spawner.m_Card3dUIPrefab : null;
+            var prefab = FindCardPrefab(out string source);
             if (prefab == null)
             {
-                Disable("the game's card renderer was not found");
+                Disable("the game's 3D card was not found");
                 return false;
             }
-            _loader = UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
+            _loader = LoadStreamTexture.m_Instance != null ? LoadStreamTexture.m_Instance : UnityEngine.Object.FindObjectOfType<LoadStreamTexture>();
             _layer = SpareLayer();
+            _channels = GameCardChannels(out string canvasSource);
+            Plugin.Log.LogInfo($"Card pictures: using '{prefab.name}' from {source}, layer {_layer}, art loader {(_loader != null ? "found" : "not found")}, canvas channels {_channels} ({canvasSource}).");
 
             var camGo = new GameObject("TCGCardTracker.PictureCamera");
             _camera = camGo.AddComponent<Camera>();
@@ -401,11 +544,133 @@ namespace TCGCardTracker
             for (int i = 0; i < LargeStageCount; i++)
             {
                 _largeStages[i] = NewStage(prefab, n++);
-                _largeTex[i] = NewTexture(LargeTexHeight, 16, "TCGCardTracker picture");
+                _largeTex[i] = NewTexture(LargeTexHeight, 24, "TCGCardTracker picture");
             }
-            _work = NewTexture(ThumbTexHeight * 2, 16, "TCGCardTracker work");
+            _work = NewTexture(ThumbTexHeight * 2, 24, "TCGCardTracker work");
             _awake = true;
             return true;
+        }
+
+        /// <summary>The game's 3D card: the card spawner's prefab, else any card the game has loaded.</summary>
+        private static Card3dUIGroup? FindCardPrefab(out string source)
+        {
+            var spawner = Card3dUISpawner.m_Instance != null ? Card3dUISpawner.m_Instance : UnityEngine.Object.FindObjectOfType<Card3dUISpawner>();
+            if (spawner != null && spawner.m_Card3dUIPrefab != null)
+            {
+                source = "the card spawner";
+                return spawner.m_Card3dUIPrefab;
+            }
+            Card3dUIGroup? fallback = null;
+            foreach (var g in Resources.FindObjectsOfTypeAll<Card3dUIGroup>())
+            {
+                if (g == null || g.m_CardUI == null || g.name.StartsWith("TCGCardTracker", StringComparison.Ordinal)) continue;
+                if (g.transform.root.name.StartsWith("TCGCardTracker", StringComparison.Ordinal)) continue;
+                // Prefer an asset (not placed in a scene), whose state the game hasn't changed.
+                if (!g.gameObject.scene.IsValid())
+                {
+                    source = "loaded assets";
+                    return g;
+                }
+                fallback ??= g;
+            }
+            source = "a card in the shop";
+            return fallback;
+        }
+
+        // ---------- Diagnostics ----------
+
+        /// <summary>Checks that a picture shows a card; if it is empty, logs the card's make-up so it can be diagnosed.</summary>
+        private void CheckPicture(Stage stage, RenderTexture rt, string face)
+        {
+            int n = ++_checks;
+            Texture2D? tex = null;
+            var active = RenderTexture.active;
+            try
+            {
+                RenderTexture.active = rt;
+                tex = new Texture2D(rt.width, rt.height, TextureFormat.RGBA32, false);
+                tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+                tex.Apply();
+                RenderTexture.active = active;
+
+                Color32 bg = Background;
+                var px = tex.GetPixels32();
+                int drawn = 0;
+                foreach (var p in px)
+                    if (Math.Abs(p.r - bg.r) + Math.Abs(p.g - bg.g) + Math.Abs(p.b - bg.b) > 24) drawn++;
+                float pct = px.Length == 0 ? 0f : drawn * 100f / px.Length;
+
+                if (pct < 2f)
+                    Plugin.LogOnce("pictures-empty", $"Card pictures: picture {n} came out empty ({pct:0.#}% shows the card).\n" + Describe(stage, face));
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pictures-check", "Card pictures: could not check a picture: " + e.Message);
+            }
+            finally
+            {
+                RenderTexture.active = active;
+                if (tex != null) UnityEngine.Object.Destroy(tex);
+            }
+        }
+
+        private string Describe(Stage stage, string face)
+        {
+            var sb = new StringBuilder();
+            var cam = _camera;
+            sb.Append("Card pictures: diagnostics. Color space ").Append(QualitySettings.activeColorSpace)
+              .Append(", picture layer ").Append(_layer).Append(", face ").Append(face).Append(".\n");
+            if (cam != null)
+                sb.Append("  camera at ").Append(cam.transform.position).Append(" looking ").Append(cam.transform.forward)
+                  .Append(", ortho size ").Append(cam.orthographicSize.ToString("0.####"))
+                  .Append(", clip ").Append(cam.nearClipPlane.ToString("0.####")).Append("-").Append(cam.farClipPlane.ToString("0.####")).Append("\n");
+            int lines = 0;
+            Walk(stage.Root.transform, 1, sb, ref lines);
+            return sb.ToString();
+        }
+
+        private static void Walk(Transform t, int depth, StringBuilder sb, ref int lines)
+        {
+            if (++lines > 400)
+            {
+                if (lines == 401) sb.Append("  ...\n");
+                return;
+            }
+            sb.Append(' ', depth * 2).Append(t.name);
+            if (!t.gameObject.activeSelf) sb.Append(" [off]");
+            sb.Append(" L").Append(t.gameObject.layer);
+            if (t is RectTransform rt)
+            {
+                var size = Vector2.Scale(rt.rect.size, rt.lossyScale);
+                sb.Append(" size ").Append(size.x.ToString("0.####")).Append('x').Append(size.y.ToString("0.####"));
+            }
+            foreach (var c in t.GetComponents<Component>())
+            {
+                if (c == null || c is Transform) continue;
+                sb.Append(" | ").Append(c.GetType().Name);
+                switch (c)
+                {
+                    case Canvas cv:
+                        sb.Append('(').Append(cv.renderMode).Append(cv.enabled ? "" : ", off").Append(", order ").Append(cv.sortingOrder)
+                          .Append(", camera ").Append(cv.worldCamera != null ? cv.worldCamera.name : "none").Append(')');
+                        break;
+                    case Image img:
+                        sb.Append('(').Append(img.enabled ? "" : "off, ").Append(img.sprite != null ? img.sprite.name : "no sprite")
+                          .Append(", a ").Append(img.color.a.ToString("0.##")).Append(", ").Append(img.material != null && img.material.shader != null ? img.material.shader.name : "no shader").Append(')');
+                        break;
+                    case Graphic g:
+                        sb.Append('(').Append(g.enabled ? "" : "off, ").Append("a ").Append(g.color.a.ToString("0.##")).Append(')');
+                        break;
+                    case Renderer r:
+                        sb.Append('(').Append(r.enabled ? "" : "off, ").Append(r.sharedMaterial != null && r.sharedMaterial.shader != null ? r.sharedMaterial.shader.name : "no material").Append(')');
+                        break;
+                    case Behaviour b when !b.enabled:
+                        sb.Append("(off)");
+                        break;
+                }
+            }
+            sb.Append('\n');
+            for (int i = 0; i < t.childCount; i++) Walk(t.GetChild(i), depth + 1, sb, ref lines);
         }
 
         private bool AllAlive()
@@ -426,15 +691,18 @@ namespace TCGCardTracker
             root.transform.position = StageOrigin + new Vector3(index * StageSpacing, 0f, 0f);
             var group = UnityEngine.Object.Instantiate(prefab, root.transform, false);
             group.m_IgnoreCulling = true;
+            // The game's cards draw through the canvas of whatever holds them (binder page, shelf);
+            // on its own the copy has none and draws nothing. World space keeps its transform as is.
+            var canvas = group.gameObject.GetComponent<Canvas>();
+            if (canvas == null) canvas = group.gameObject.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.additionalShaderChannels |= _channels;
             group.gameObject.SetActive(true);
             SetLayer(group.gameObject);
             root.SetActive(true);
 
             // Keep the game's card manager (culling, brightness) away from our copies.
             Card3dUISpawner.RemoveCardFromManager(group);
-            group.SetCardCountTextVisibility(false);
-            if (group.m_NewCardIndicator != null) group.m_NewCardIndicator.SetActive(false);
-            if (group.m_CardBackMesh != null) group.m_CardBackMesh.SetActive(false);
 
             return new Stage
             {
@@ -443,6 +711,36 @@ namespace TCGCardTracker
                 Images = group.GetComponentsInChildren<Image>(true),
                 CreatedFrame = Time.frameCount,
             };
+        }
+
+        /// <summary>
+        /// The extra mesh data (normals, tangents, extra UVs) the canvas holding the game's own cards
+        /// passes to shaders; the foil shaders may need it. Everything, if no such canvas is found.
+        /// </summary>
+        private static AdditionalCanvasShaderChannels GameCardChannels(out string source)
+        {
+            const AdditionalCanvasShaderChannels all = AdditionalCanvasShaderChannels.TexCoord1 | AdditionalCanvasShaderChannels.TexCoord2
+                | AdditionalCanvasShaderChannels.TexCoord3 | AdditionalCanvasShaderChannels.Normal | AdditionalCanvasShaderChannels.Tangent;
+            try
+            {
+                foreach (var g in Resources.FindObjectsOfTypeAll<Card3dUIGroup>())
+                {
+                    if (g == null || !g.gameObject.scene.IsValid() || g.transform.root.name.StartsWith("TCGCardTracker", StringComparison.Ordinal)) continue;
+                    for (var t = g.transform; t != null; t = t.parent)
+                    {
+                        var canvas = t.GetComponent<Canvas>();
+                        if (canvas == null) continue;
+                        source = $"from '{canvas.name}', {canvas.renderMode}";
+                        return canvas.additionalShaderChannels;
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pictures-canvas", "Card pictures: could not look at the game's card canvas: " + e.Message);
+            }
+            source = "no game card canvas found, using all";
+            return all;
         }
 
         /// <summary>Moves the card and everything under it (text adds pieces as it changes) to the picture layer.</summary>
@@ -522,6 +820,8 @@ namespace TCGCardTracker
             Teardown(keepThumbs: false);
             _disabled = false;
             _failures = 0;
+            _renderFailures = 0;
+            Status = "";
         }
 
         private void Teardown(bool keepThumbs)
@@ -557,6 +857,7 @@ namespace TCGCardTracker
         {
             if (_disabled) return;
             _disabled = true;
+            Status = $"Card pictures are off: {why}. Details are in BepInEx\\LogOutput.log.";
             Plugin.Log.LogWarning($"Card pictures are off: {why}. The card list still works without them.");
             try
             {
