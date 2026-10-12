@@ -129,6 +129,16 @@ namespace TCGCardTracker.Core
             else Add(loc, card, 0, r.Amount);
         }
 
+        /// <summary>Copies of the given cards in each location (zero where a location is not included).</summary>
+        public int[] CopiesByLoc(IEnumerable<Card> cards, Column col, bool[] included)
+        {
+            var byLoc = new int[LocCount];
+            foreach (var card in cards)
+                for (int l = 0; l < LocCount; l++)
+                    if (l < included.Length && included[l]) byLoc[l] += Aggregate.Copies(ByLoc[l], card, col);
+            return byLoc;
+        }
+
         public int[] Combine(bool[] included)
         {
             var total = new int[Catalog.Cards.Count * Cols];

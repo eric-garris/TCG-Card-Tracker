@@ -6,7 +6,12 @@ Press **F7** in your shop to open it.
 - For every set (Tetramon, Destiny, Ascension, Ghost) it shows how many different cards you own
   **ungraded and at each grade 1–10**, plus "any grade" and "any form", with total copies.
 - Expand a set into editions (Basic … Full Art; Ghost White/Black), then into Non-foil / Foil.
-- Click any cell to list the missing (or owned) cards for it, with today's market price.
+- Click any cell to list the missing (or owned) cards for it, with today's market price. Hover a
+  cell to see where those copies are (binder, displays, storage and so on).
+- The card list shows where each card's copies sit, has a search box (name, edition, "foil" or a
+  card number) and sorts by number, name, price or rarity.
+- **Spares** lists the copies beyond the best one you own in the chosen condition, with what they
+  are worth, so you know what is safe to sell or put on display.
 - Each card in the list has a picture drawn by the game itself, the same way the binder draws it,
   with its edition border, rarity and foil. Hover a picture to enlarge it, or click it to pin it in
   its own window (drag it anywhere, click the picture again or `x` to close).

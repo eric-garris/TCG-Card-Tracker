@@ -119,6 +119,61 @@ namespace TCGCardTracker.Tests
             Assert.Equal((2, 1452, 4), Tuple(Aggregate.Of(cards, binderOnly, Column.Ungraded)));
         }
 
+        [Fact]
+        public void CopiesByLocSkipsPlacesThatAreOff()
+        {
+            var c = new Collection(Cat);
+            var pigni = Cat.FromCompact(0, 0, false)!;
+            c.AddCompact(Loc.Storage, new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 3 });
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 9, GradedIndex = 1 });
+            c.AddPhysical(Loc.Displays, new PhysicalRec { Expansion = 0, Monster = 1, Border = 0 });
+
+            var all = c.CopiesByLoc(new[] { pigni }, Column.Any, All);
+            Assert.Equal((1, 1, 3), (all[(int)Loc.Binder], all[(int)Loc.Displays], all[(int)Loc.Storage]));
+            Assert.Equal(1, c.CopiesByLoc(new[] { pigni }, Column.Graded, All)[(int)Loc.Binder]);
+
+            var noStorage = All.ToArray();
+            noStorage[(int)Loc.Storage] = false;
+            Assert.Equal(0, c.CopiesByLoc(new[] { pigni }, Column.Any, noStorage)[(int)Loc.Storage]);
+        }
+
+        [Fact]
+        public void SparesKeepTheBestCopy()
+        {
+            var c = new Collection(Cat);
+            var pigni = Cat.FromCompact(0, 0, false)!;
+            c.AddCompact(Loc.Storage, new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 3 });
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 9, GradedIndex = 1 });
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 9, GradedIndex = 2 });
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 4, GradedIndex = 3 });
+            var totals = c.Combine(All);
+            float? Price(int col) => col == 0 ? 1f : col == 9 ? 100f : col == 4 ? 10f : (float?)null;
+
+            var any = CardQueries.SpareOf(totals, pigni, Column.Any);
+            Assert.Equal((5, 9), (any.Copies, any.KeptCol));
+            Assert.Equal(3f + 100f + 10f, CardQueries.SpareValue(totals, pigni, Column.Any, Price));
+
+            Assert.Equal(2, CardQueries.SpareOf(totals, pigni, Column.Ungraded).Copies);
+            Assert.Equal(2f, CardQueries.SpareValue(totals, pigni, Column.Ungraded, Price));
+            Assert.Equal(2, CardQueries.SpareOf(totals, pigni, Column.Graded).Copies);
+            Assert.Equal(0, CardQueries.SpareOf(totals, pigni, new Column(4)).Copies);
+            Assert.Equal(0, CardQueries.SpareOf(totals, Cat.FromCompact(0, 1, false)!, Column.Any).Copies);
+        }
+
+        [Fact]
+        public void SearchMatchesNameEditionAndNumber()
+        {
+            var burpigGoldFoil = Cat.FromCompact(0, 21, false)!; // #2
+            Assert.True(CardQueries.Matches(burpigGoldFoil, ""));
+            Assert.True(CardQueries.Matches(burpigGoldFoil, "burp"));
+            Assert.True(CardQueries.Matches(burpigGoldFoil, "burpig gold foil"));
+            Assert.True(CardQueries.Matches(burpigGoldFoil, "#2"));
+            Assert.True(CardQueries.Matches(burpigGoldFoil, "2 gold"));
+            Assert.False(CardQueries.Matches(burpigGoldFoil, "pigni"));
+            Assert.False(CardQueries.Matches(burpigGoldFoil, "burpig silver"));
+            Assert.False(CardQueries.Matches(burpigGoldFoil, "12"));
+        }
+
         private static (int, int, int) Tuple(Agg a) => (a.Owned, a.Total, a.Copies);
     }
 }
