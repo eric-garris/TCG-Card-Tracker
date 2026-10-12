@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Text;
 using TCGCardTracker.Core;
 using UnityEngine;
@@ -90,7 +89,7 @@ namespace TCGCardTracker
         /// <summary>Why pictures are off, for the panel.</summary>
         public string Status { get; private set; } = "";
 
-        /// <summary>The first few pictures of a session are checked, saved and logged, so a broken picture can be diagnosed.</summary>
+        /// <summary>The first few pictures of a session are checked, so a broken picture (e.g. after a game update) shows in the log.</summary>
         private const int PictureChecks = 3;
         private int _checks;
 
@@ -580,7 +579,7 @@ namespace TCGCardTracker
 
         // ---------- Diagnostics ----------
 
-        /// <summary>Saves the picture next to the mod and logs how much of it shows a card, plus the card's make-up.</summary>
+        /// <summary>Checks that a picture shows a card; if it is empty, logs the card's make-up so it can be diagnosed.</summary>
         private void CheckPicture(Stage stage, RenderTexture rt, string face)
         {
             int n = ++_checks;
@@ -601,23 +600,8 @@ namespace TCGCardTracker
                     if (Math.Abs(p.r - bg.r) + Math.Abs(p.g - bg.g) + Math.Abs(p.b - bg.b) > 24) drawn++;
                 float pct = px.Length == 0 ? 0f : drawn * 100f / px.Length;
 
-                string path = "";
-                try
-                {
-                    string dir = Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? "";
-                    if (dir.Length == 0) dir = Application.persistentDataPath;
-                    path = Path.Combine(dir, $"card-picture-check-{n}.png");
-                    File.WriteAllBytes(path, tex.EncodeToPNG());
-                }
-                catch (Exception e)
-                {
-                    path = "(could not save: " + e.Message + ")";
-                }
-
-                string msg = $"Card pictures: check {n}: {pct:0.#}% of the picture shows the card. Saved to {path}.";
-                if (pct < 2f) Plugin.Log.LogWarning(msg + " The picture is empty.");
-                else Plugin.Log.LogInfo(msg);
-                if (n == 1 || pct < 2f) Plugin.LogOnce("pictures-describe:" + (pct < 2f), Describe(stage, face));
+                if (pct < 2f)
+                    Plugin.LogOnce("pictures-empty", $"Card pictures: picture {n} came out empty ({pct:0.#}% shows the card).\n" + Describe(stage, face));
             }
             catch (Exception e)
             {
