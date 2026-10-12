@@ -61,20 +61,20 @@ namespace TCGCardTracker.Core
             for (int i = 0; i < LocCount; i++) ByLoc[i] = new int[catalog.Cards.Count * Cols];
         }
 
+        /// <summary>The column a card's grade counts in.</summary>
+        public static int ColumnOf(int grade) =>
+            grade <= 0 ? 0 :
+            grade <= 10 ? grade :
+            // A vanilla storage-shelf quirk adds ungraded copies onto a slab's stored grade; the game
+            // treats such cards as grade 10. Grading mods' encoded grades are far larger.
+            grade < VanillaGradeLimit ? 10 :
+            ColOther;
+
         private void Add(Loc loc, Card card, int grade, int copies)
         {
             if (copies <= 0) return;
-            int col;
-            if (grade <= 0) col = 0;
-            else if (grade <= 10) col = grade;
-            // A vanilla storage-shelf quirk adds ungraded copies onto a slab's stored grade; the game
-            // treats such cards as grade 10. Grading mods' encoded grades are far larger.
-            else if (grade < VanillaGradeLimit) col = 10;
-            else
-            {
-                col = ColOther;
-                ModdedGrades += copies;
-            }
+            int col = ColumnOf(grade);
+            if (col == ColOther) ModdedGrades += copies;
             ByLoc[(int)loc][card.Index * Cols + col] += copies;
         }
 

@@ -39,6 +39,14 @@ namespace TCGCardTracker.Core
         /// <summary>How good a column's copy is: ungraded, then a modded grade, then grades 1-10.</summary>
         private static int Rank(int col) => col == 0 ? 0 : col == Collection.ColOther ? 1 : col + 1;
 
+        /// <summary>One incoming copy at a column: a gain if no copy is owned yet or it beats the best one owned.</summary>
+        public static Gain? GainFrom(int[] totals, Card card, int col)
+        {
+            int was = SpareOf(totals, card, Column.Any).KeptCol;
+            if (was >= 0 && Rank(col) <= Rank(was)) return null;
+            return new Gain { Card = card, IsNew = was < 0, BestCol = col, Copies = 1 };
+        }
+
         /// <summary>
         /// Compares two snapshots of combined totals: cards with no copy before and some now, and cards whose
         /// best copy is now a better grade than before.

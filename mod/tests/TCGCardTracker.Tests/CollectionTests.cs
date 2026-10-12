@@ -183,6 +183,25 @@ namespace TCGCardTracker.Tests
         }
 
         [Fact]
+        public void OfferedCardIsAGainOnlyWhenNewOrBetter()
+        {
+            var c = new Collection(Cat);
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 6, GradedIndex = 1 });
+            var totals = c.Combine(All);
+            var owned = Cat.FromCompact(0, 0, false)!;
+            var missing = Cat.FromCompact(0, 1, false)!;
+
+            Assert.Null(CardQueries.GainFrom(totals, owned, Collection.ColumnOf(0)));
+            Assert.Null(CardQueries.GainFrom(totals, owned, Collection.ColumnOf(6)));
+            var better = CardQueries.GainFrom(totals, owned, Collection.ColumnOf(8))!.Value;
+            Assert.Equal((false, 8), (better.IsNew, better.BestCol));
+            var fresh = CardQueries.GainFrom(totals, missing, Collection.ColumnOf(0))!.Value;
+            Assert.Equal((true, 0), (fresh.IsNew, fresh.BestCol));
+            Assert.Equal(10, Collection.ColumnOf(42));
+            Assert.Equal(Collection.ColOther, Collection.ColumnOf(250000));
+        }
+
+        [Fact]
         public void SearchMatchesNameEditionAndNumber()
         {
             var burpigGoldFoil = Cat.FromCompact(0, 21, false)!; // #2

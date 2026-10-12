@@ -8,10 +8,12 @@ using UnityEngine;
 namespace TCGCardTracker
 {
     /// <summary>
-    /// "New for your collection": the one place the mod hooks the game. A prefix on
+    /// "New for your collection": the only places the mod hooks the game. A prefix on
     /// CardOpeningSequence.GetPackContent (the pack roll) snapshots what you own; once the opening
     /// screen closes, a second read shows which cards are new, or now owned at a better grade, and a
-    /// short toast lists them. The hook only reads, and any error is logged while the game carries on.
+    /// short toast lists them. A postfix on CustomerTradeCardScreen.SetCustomer does the same for the
+    /// card a customer offers to trade or sell. The hooks only read, and any error is logged while the
+    /// game carries on.
     /// </summary>
     internal static class PackWatcher
     {
@@ -31,20 +33,37 @@ namespace TCGCardTracker
 
         public static void Install()
         {
+            Harmony harmony;
             try
             {
-                var harmony = new Harmony(Plugin.Guid);
-                var roll = AccessTools.Method(typeof(CardOpeningSequence), "GetPackContent");
-                if (roll == null)
-                {
-                    Plugin.Log.LogWarning("Could not find the game's pack opening code; the new-card popup is off.");
-                    return;
-                }
-                harmony.Patch(roll, prefix: new HarmonyMethod(typeof(PackWatcher), nameof(BeforeRoll)));
+                harmony = new Harmony(Plugin.Guid);
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning("Could not hook pack opening; the new-card popup is off: " + e.Message);
+                Plugin.Log.LogWarning("Could not start Harmony; the new-card popup is off: " + e.Message);
+                return;
+            }
+            Patch(harmony, typeof(CardOpeningSequence), "GetPackContent", nameof(BeforeRoll), prefix: true, "pack opening");
+            Patch(harmony, typeof(CustomerTradeCardScreen), "SetCustomer", nameof(AfterOffer), prefix: false, "trade offers");
+        }
+
+        private static void Patch(Harmony harmony, Type type, string method, string handler, bool prefix, string what)
+        {
+            try
+            {
+                var target = AccessTools.Method(type, method);
+                if (target == null)
+                {
+                    Plugin.Log.LogWarning($"Could not find the game's {type.Name}.{method}; the new-card popup won't cover {what}.");
+                    return;
+                }
+                var patch = new HarmonyMethod(typeof(PackWatcher), handler);
+                if (prefix) harmony.Patch(target, prefix: patch);
+                else harmony.Patch(target, postfix: patch);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning($"Could not hook {what}; the new-card popup won't cover them: " + e.Message);
             }
         }
 
@@ -65,13 +84,7 @@ namespace TCGCardTracker
             {
                 // A multi-pack rolls several times on one screen: keep the snapshot from the first.
                 if (_before != null || !Plugin.NewCardPopup.Value || !GameReader.IsReady()) return;
-                _catalog ??= GameReader.BuildCatalog();
-                if (Plugin.LiveShelves.Value && Time.realtimeSinceStartup - _shelvesRefreshedAt >= ShelfRefreshEvery)
-                {
-                    GameReader.RefreshShelfData();
-                    _shelvesRefreshedAt = Time.realtimeSinceStartup;
-                }
-                _before = Owned(_catalog);
+                _before = Snapshot();
                 _sequence = __instance;
                 _rolledAt = Time.realtimeSinceStartup;
                 _sawScreen = false;
@@ -82,6 +95,50 @@ namespace TCGCardTracker
                 _before = null;
                 Plugin.LogOnce("pack-roll", "New-card popup could not read the collection before a pack: " + e);
             }
+        }
+
+        /// <summary>
+        /// Harmony postfix on the trade screen opening for a customer. The customer's card is the left one
+        /// (m_CardData_L) whether they trade or sell, read from the trade data passed in, else from the
+        /// screen. Fields are read by name, so a renamed one is just skipped.
+        /// </summary>
+        private static void AfterOffer(CustomerTradeCardScreen __instance, object[] __args)
+        {
+            try
+            {
+                if (!Plugin.NewCardPopup.Value || !GameReader.IsReady()) return;
+                object source = __instance;
+                foreach (var a in __args)
+                    if (a is CustomerTradeData) source = a;
+                var offer = Traverse.Create(source);
+                var offered = offer.Field("m_CardData_L").GetValue() as CardData;
+                if (offered == null || (int)offered.monsterType <= 0) return;
+                bool trading = offer.Field("m_IsTrading").GetValue() as bool? ?? true;
+
+                var owned = Snapshot();
+                var card = _catalog!.FromPhysical((int)offered.expansionType, (int)offered.monsterType, (int)offered.borderType, offered.isFoil, offered.isDestiny);
+                if (card == null) return;
+                var gain = CardQueries.GainFrom(owned, card, Collection.ColumnOf(offered.cardGrade));
+                if (gain == null) return;
+                Plugin.Log.LogInfo($"{(trading ? "Trade" : "Sale")} offer is new for your collection: {card.Label}");
+                Toast.Show(new List<Gain> { gain.Value }, trading ? "Trade offer" : "Sale offer");
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("trade-offer", "New-card popup could not check a trade offer: " + e);
+            }
+        }
+
+        /// <summary>What you own now, refreshing the shelves from the shop at most once a minute.</summary>
+        private static int[] Snapshot()
+        {
+            _catalog ??= GameReader.BuildCatalog();
+            if (Plugin.LiveShelves.Value && Time.realtimeSinceStartup - _shelvesRefreshedAt >= ShelfRefreshEvery)
+            {
+                GameReader.RefreshShelfData();
+                _shelvesRefreshedAt = Time.realtimeSinceStartup;
+            }
+            return Owned(_catalog);
         }
 
         /// <summary>Called every frame: once the opening screen has closed, compares and shows the toast.</summary>
@@ -152,7 +209,8 @@ namespace TCGCardTracker
 
         public void Clear() => _until = -1f;
 
-        public void Show(List<Gain> gains)
+        /// <summary>Lists the gains; `source` (e.g. "Trade offer") prefixes the title.</summary>
+        public void Show(List<Gain> gains, string? source = null)
         {
             _lines.Clear();
             int news = 0;
@@ -161,6 +219,7 @@ namespace TCGCardTracker
             _title = news == gains.Count ? (news == 1 ? "New for your collection" : $"{news} new for your collection")
                 : news == 0 ? "New best grade"
                 : $"New for your collection: {news} new, {gains.Count - news} better grade";
+            if (source != null) _title = source + ": " + (news == 0 ? "better grade than yours" : "new for your collection");
             for (int i = 0; i < gains.Count && i < MaxLines; i++)
                 _lines.Add(Line(gains[i]));
             if (gains.Count > MaxLines) _lines.Add($"and {gains.Count - MaxLines} more (F7 to see your collection)");

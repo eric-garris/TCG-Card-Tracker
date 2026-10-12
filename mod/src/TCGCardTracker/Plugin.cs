@@ -50,8 +50,9 @@ namespace TCGCardTracker
             LiveShelves = Config.Bind("General", "LiveShelves", true,
                 "Re-read display shelves, storage and boxes from the shop when the tracker opens or refreshes. Turn off to use the last save instead.");
             NewCardPopup = Config.Bind("General", "NewCardPopup", true,
-                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade). " +
-                "This is the only part of the mod that hooks the game's code; when it is off at startup, the hook is not installed at all.");
+                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade), " +
+                "and flag a customer's trade or sale offer for such a card. " +
+                "This is the only part of the mod that hooks the game's code; when it is off at startup, the hooks are not installed at all.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
