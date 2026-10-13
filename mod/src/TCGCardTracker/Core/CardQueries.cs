@@ -23,8 +23,57 @@ namespace TCGCardTracker.Core
         public int Copies;
     }
 
+    /// <summary>How many copies of one card you own, ungraded and at each grade.</summary>
+    public struct Holding
+    {
+        public int Ungraded;
+        public int Graded;
+        /// <summary>Graded copies per column (1-10, Collection.ColOther); index 0 is unused.</summary>
+        public int[] ByCol;
+
+        public int Copies => Ungraded + Graded;
+
+        /// <summary>The banner text: "You own none", or the copy count, then ungraded and graded lines.</summary>
+        public List<string> Lines()
+        {
+            var lines = new List<string>();
+            if (Copies == 0)
+            {
+                lines.Add("You own none");
+                return lines;
+            }
+            lines.Add(Copies == 1 ? "You own 1 copy" : $"You own {Copies} copies");
+            if (Ungraded > 0) lines.Add($"Ungraded: {Ungraded}");
+            if (Graded > 0)
+            {
+                var grades = new List<string>();
+                // Best first: 10 down to 1, then grades written by grading mods.
+                for (int c = 10; c >= 1; c--)
+                    if (ByCol[c] > 0) grades.Add(Grade(c));
+                if (ByCol[Collection.ColOther] > 0) grades.Add(Grade(Collection.ColOther));
+                lines.Add($"Graded: {Graded} ({string.Join(", ", grades)})");
+            }
+            return lines;
+        }
+
+        private string Grade(int col) => new Column(col).LongLabel + (ByCol[col] > 1 ? $" x{ByCol[col]}" : "");
+    }
+
     public static class CardQueries
     {
+        /// <summary>Copies of a card in combined totals, split into ungraded and each grade.</summary>
+        public static Holding HoldingOf(int[] totals, Card card)
+        {
+            int b = card.Index * Collection.Cols;
+            var h = new Holding { Ungraded = totals[b], ByCol = new int[Collection.Cols] };
+            for (int c = 1; c < Collection.Cols; c++)
+            {
+                h.ByCol[c] = totals[b + c];
+                h.Graded += totals[b + c];
+            }
+            return h;
+        }
+
         /// <summary>The grid columns a column covers.</summary>
         public static IEnumerable<int> ColumnsOf(Column col)
         {

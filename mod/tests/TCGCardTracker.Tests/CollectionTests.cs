@@ -202,6 +202,31 @@ namespace TCGCardTracker.Tests
         }
 
         [Fact]
+        public void HoldingSplitsUngradedAndGraded()
+        {
+            var c = new Collection(Cat);
+            var tetramon = Cat.SetForExpansion(0)!;
+            var album = new int[1452];
+            album[21] = 2;
+            c.AddAlbum(tetramon, 0, album);
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 21, Amount = 10, GradedIndex = 1 });
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 21, Amount = 10, GradedIndex = 2 });
+            c.AddPhysical(Loc.Displays, new PhysicalRec { Expansion = 0, Monster = 2, Border = 3, Foil = true, Grade = 8 });
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 21, Amount = 380009117, GradedIndex = 3 });
+            var totals = c.Combine(All);
+
+            var burpig = CardQueries.HoldingOf(totals, Cat.FromCompact(0, 21, false)!);
+            Assert.Equal((2, 4, 6), (burpig.Ungraded, burpig.Graded, burpig.Copies));
+            Assert.Equal(new[] { "You own 6 copies", "Ungraded: 2", "Graded: 4 (Grade 10 x2, Grade 8, Other grade)" }, burpig.Lines());
+
+            var none = CardQueries.HoldingOf(totals, Cat.FromCompact(0, 0, false)!);
+            Assert.Equal(new[] { "You own none" }, none.Lines());
+
+            c.AddCompact(Loc.Storage, new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 1 });
+            Assert.Equal(new[] { "You own 1 copy", "Ungraded: 1" }, CardQueries.HoldingOf(c.Combine(All), Cat.FromCompact(0, 0, false)!).Lines());
+        }
+
+        [Fact]
         public void SearchMatchesNameEditionAndNumber()
         {
             var burpigGoldFoil = Cat.FromCompact(0, 21, false)!; // #2

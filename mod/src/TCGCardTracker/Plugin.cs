@@ -15,7 +15,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.6.0";
+        public const string Version = "0.7.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -24,6 +24,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> ShowCopies = null!;
         internal static ConfigEntry<bool> ShowPictures = null!;
         internal static ConfigEntry<bool> NewCardPopup = null!;
+        internal static ConfigEntry<bool> TradeBanners = null!;
         internal static ConfigEntry<float> PopupSeconds = null!;
         internal static ConfigEntry<float> PopupScale = null!;
         internal static ConfigEntry<float> CustomTradeChance = null!;
@@ -55,13 +56,16 @@ namespace TCGCardTracker
             LiveShelves = Config.Bind("General", "LiveShelves", true,
                 "Re-read display shelves, storage and boxes from the shop when the tracker opens or refreshes. Turn off to use the last save instead.");
             NewCardPopup = Config.Bind("General", "NewCardPopup", true,
-                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade), " +
-                "and flag a customer's trade or sale offer for such a card. " +
-                "This is the only part of the mod that hooks the game's code; when it is off at startup, the hooks are not installed at all.");
+                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade). " +
+                "This hooks the game's pack opening; when it is off at startup, the hook is not installed at all.");
             PopupSeconds = Config.Bind("General", "PopupSeconds", 12f,
                 "How long the new-card popup stays on screen, in seconds (2 - 120). Each extra card listed adds a second.");
             PopupScale = Config.Bind("General", "PopupScale", 1f,
-                "Size of the new-card popup (0.5 - 3). It already grows with your screen resolution.");
+                "Size of the new-card popup and the trade banners (0.5 - 3). They already grow with your screen resolution.");
+            TradeBanners = Config.Bind("Trades", "TradeBanners", true,
+                "While a customer's trade or sale offer is open, show a banner above their card, and above the card they want " +
+                "from you in a trade, saying how many copies you own, ungraded and at each grade. " +
+                "This hooks the game's trade screen; when it is off at startup, the hook is not installed at all.");
             CustomTradeChance = Config.Bind("Trades", "CustomTradeChance", 0.25f,
                 "With TCG Studio installed: the chance (0 - 1) that a customer who comes to trade or sell brings a card from one of " +
                 "its custom sets instead of a vanilla one. 0 leaves trades as TCG Studio makes them. " +
@@ -76,6 +80,7 @@ namespace TCGCardTracker
             Runner.Spawn();
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (NewCardPopup.Value) PackWatcher.Install();
+            if (TradeBanners.Value) TradeBanner.Install();
             CustomTrades.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
@@ -85,6 +90,7 @@ namespace TCGCardTracker
         {
             Runner.Window.ForceClose();
             PackWatcher.Reset();
+            TradeBanner.Reset();
             Runner.Spawn();
             Runner.AttachToGameHost();
         }
@@ -161,6 +167,7 @@ namespace TCGCardTracker
             try
             {
                 PackWatcher.Tick();
+                TradeBanner.Tick();
             }
             catch (System.Exception e)
             {
@@ -173,6 +180,7 @@ namespace TCGCardTracker
             if (_driver != this) return;
             Window.Draw();
             PackWatcher.Toast.Draw();
+            TradeBanner.Draw();
         }
 
         private void OnDestroy()
