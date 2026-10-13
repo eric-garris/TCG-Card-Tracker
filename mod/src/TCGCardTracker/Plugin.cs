@@ -9,11 +9,13 @@ using UnityEngine.SceneManagement;
 namespace TCGCardTracker
 {
     [BepInPlugin(Guid, Name, Version)]
+    // Load after TCG Studio when it is installed, so its trade hook exists to patch.
+    [BepInDependency(CustomTrades.StudioGuid, BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.5.0";
+        public const string Version = "0.6.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -24,6 +26,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> NewCardPopup = null!;
         internal static ConfigEntry<float> PopupSeconds = null!;
         internal static ConfigEntry<float> PopupScale = null!;
+        internal static ConfigEntry<float> CustomTradeChance = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -59,6 +62,10 @@ namespace TCGCardTracker
                 "How long the new-card popup stays on screen, in seconds (2 - 120). Each extra card listed adds a second.");
             PopupScale = Config.Bind("General", "PopupScale", 1f,
                 "Size of the new-card popup (0.5 - 3). It already grows with your screen resolution.");
+            CustomTradeChance = Config.Bind("Trades", "CustomTradeChance", 0.25f,
+                "With TCG Studio installed: the chance (0 - 1) that a customer who comes to trade or sell brings a card from one of " +
+                "its custom sets instead of a vanilla one. 0 leaves trades as TCG Studio makes them. " +
+                "This hooks TCG Studio's trade code, and only when TCG Studio is installed.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
@@ -69,6 +76,7 @@ namespace TCGCardTracker
             Runner.Spawn();
             SceneManager.sceneLoaded += OnSceneLoaded;
             if (NewCardPopup.Value) PackWatcher.Install();
+            CustomTrades.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
