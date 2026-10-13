@@ -23,6 +23,8 @@ Press **F7** in your shop to open it.
   trade or sell that is new to you (or better graded than your best copy), it pops up too.
   Turn it off with `NewCardPopup`. `PopupSeconds` (12 by default) and `PopupScale` set how long
   it stays and how big it is.
+- Custom card sets added by a card-set mod such as [TCG Studio](https://github.com/GrimGrab/TCG-Studio)
+  are tracked too, and count for the new-card popup.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup is the only part that hooks the
   game's code (pack opening and the trade screen), and it only reads; with `NewCardPopup` off the

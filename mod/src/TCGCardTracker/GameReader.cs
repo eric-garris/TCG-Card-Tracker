@@ -52,6 +52,14 @@ namespace TCGCardTracker
             new SetTemplate { Key = "catjob", Name = "Cat Job", Expansion = 5, Lists = new[] { new ListDef { Suffix = "CatJob" } }, FallbackEditions = StandardEditions, OnlyIfOwned = true },
         };
 
+        /// <summary>
+        /// Card-set mods such as TCG Studio register their sets as expansion ints from 100 up, with monster ids from
+        /// 999,999 up, and answer the game's own lookups (shown list, name, album counts) for them.
+        /// </summary>
+        private const int CustomExpansionBase = 100;
+        private const int CustomExpansionLimit = 400;
+        private const int CustomMonsterBase = 999_999;
+
         private const BindingFlags StaticPublic = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
 
         private static object? StaticField(string name)
@@ -117,7 +125,62 @@ namespace TCGCardTracker
                     Editions = editions,
                 });
             }
+            sets.AddRange(CustomSets());
             return Catalog.Build(sets, MonsterName, MonsterTier);
+        }
+
+        private static bool IsCustom(int expansion) => expansion >= CustomExpansionBase;
+
+        /// <summary>Sets added by a card-set mod, found through the game lookups it patches. None without such a mod.</summary>
+        private static IEnumerable<SetDef> CustomSets()
+        {
+            var editions = new string[6];
+            for (int b = 0; b < editions.Length; b++)
+                editions[b] = BorderName(0, b, false) ?? StandardEditions[b];
+            for (int e = CustomExpansionBase; e < CustomExpansionLimit; e++)
+            {
+                int[] shown = ShownMonsters(e, quiet: true);
+                // Without a set mod the game falls back to a vanilla list here, so only ids in the custom range count.
+                if (shown.Length == 0 || Array.Exists(shown, id => id < CustomMonsterBase)) yield break;
+                yield return new SetDef
+                {
+                    Key = "custom" + e,
+                    Name = ExpansionName(e),
+                    ExpansionType = e,
+                    Lists = new[] { new ListDef { Suffix = "" } },
+                    Shown = shown,
+                    PerNoFoil = 6,
+                    Editions = editions,
+                };
+            }
+        }
+
+        private static string ExpansionName(int expansion)
+        {
+            try
+            {
+                var name = InventoryBase.GetCardExpansionName((ECardExpansionType)expansion);
+                if (!string.IsNullOrWhiteSpace(name)) return name.Trim();
+            }
+            catch
+            {
+                // Fall through to a generic name.
+            }
+            return "Custom set " + (expansion - CustomExpansionBase + 1);
+        }
+
+        /// <summary>A custom set's album counts, from the game's own accessor (which the set mod answers).</summary>
+        private static List<int>? CustomAlbum(int expansion)
+        {
+            try
+            {
+                return CPlayerData.GetCardCollectedList((ECardExpansionType)expansion, false);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("custom-album:" + expansion, $"Could not read the album of custom set {expansion}: {e.Message}");
+                return null;
+            }
         }
 
         private static bool HasAnyCards(SetTemplate t)
@@ -132,7 +195,7 @@ namespace TCGCardTracker
             return false;
         }
 
-        private static int[] ShownMonsters(int expansion)
+        private static int[] ShownMonsters(int expansion, bool quiet = false)
         {
             try
             {
@@ -144,7 +207,7 @@ namespace TCGCardTracker
             }
             catch (Exception e)
             {
-                Plugin.LogOnce("shown:" + expansion, $"No monster list for expansion {expansion}: {e.Message}");
+                if (!quiet) Plugin.LogOnce("shown:" + expansion, $"No monster list for expansion {expansion}: {e.Message}");
                 return Array.Empty<int>();
             }
         }
@@ -237,7 +300,7 @@ namespace TCGCardTracker
 
             foreach (var set in catalog.Sets)
                 for (int li = 0; li < set.Lists.Length; li++)
-                    c.AddAlbum(set, li, AlbumList(set.Lists[li].Suffix));
+                    c.AddAlbum(set, li, IsCustom(set.ExpansionType) ? CustomAlbum(set.ExpansionType) : AlbumList(set.Lists[li].Suffix));
 
             foreach (var row in Safe(CPlayerData.m_GradedCardInventoryList))
                 c.AddGradedAlbumRow(Compact(row));
