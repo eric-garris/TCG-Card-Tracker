@@ -21,7 +21,8 @@ Press **F7** in your shop to open it.
   you (no copy anywhere you count) or that you now own at a better grade than before. It appears
   once the opening screen closes, so it never spoils a reveal. When a customer offers a card to
   trade or sell that is new to you (or better graded than your best copy), it pops up too.
-  Turn it off with `NewCardPopup`.
+  Turn it off with `NewCardPopup`. `PopupSeconds` (12 by default) and `PopupScale` set how long
+  it stays and how big it is.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup is the only part that hooks the
   game's code (pack opening and the trade screen), and it only reads; with `NewCardPopup` off the

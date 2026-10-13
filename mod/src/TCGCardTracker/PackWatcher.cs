@@ -198,7 +198,6 @@ namespace TCGCardTracker
     internal sealed class Toast
     {
         private const int MaxLines = 6;
-        private const float BaseSeconds = 5f;
         private const float FadeSeconds = 0.6f;
 
         private readonly List<string> _lines = new List<string>();
@@ -223,7 +222,7 @@ namespace TCGCardTracker
             for (int i = 0; i < gains.Count && i < MaxLines; i++)
                 _lines.Add(Line(gains[i]));
             if (gains.Count > MaxLines) _lines.Add($"and {gains.Count - MaxLines} more (F7 to see your collection)");
-            _duration = BaseSeconds + 0.5f * Math.Min(gains.Count, MaxLines);
+            _duration = Mathf.Clamp(Plugin.PopupSeconds.Value, 2f, 120f) + Math.Min(gains.Count, MaxLines) - 1;
             _until = Time.realtimeSinceStartup + _duration;
         }
 
@@ -249,24 +248,25 @@ namespace TCGCardTracker
             try
             {
                 Ensure();
-                float scale = Mathf.Clamp(Plugin.UiScale.Value, 0.75f, 2f);
+                // Sized for 1080p and scaled up with the screen, so it reads the same on 1440p and 4K.
+                float scale = Mathf.Clamp(Plugin.PopupScale.Value, 0.5f, 3f) * Mathf.Max(1f, Screen.height / 1080f);
                 GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
-                float sw = Screen.width / scale;
+                float sw = Screen.width / scale, sh = Screen.height / scale;
                 float left = _until - Time.realtimeSinceStartup;
                 float shown = _duration - left;
                 GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01(Mathf.Min(left, shown) / FadeSeconds));
 
                 float w = _titleStyle!.CalcSize(new GUIContent(_title)).x;
                 foreach (var l in _lines) w = Mathf.Max(w, _lineStyle!.CalcSize(new GUIContent(l)).x);
-                w = Mathf.Min(w + 28f, sw - 40f);
-                const float lineH = 20f, titleH = 24f;
-                float h = 12f + titleH + lineH * _lines.Count + 8f;
-                var r = new Rect((sw - w) / 2f, 24f, w, h);
+                const float pad = 22f, lineH = 30f, titleH = 40f;
+                w = Mathf.Min(w + pad * 2f, sw - 40f);
+                float h = pad + titleH + lineH * _lines.Count + pad;
+                var r = new Rect((sw - w) / 2f, sh * 0.1f, w, h);
 
                 GUI.Box(r, GUIContent.none, _box);
-                GUI.Label(new Rect(r.x + 14f, r.y + 8f, w - 28f, titleH), _title, _titleStyle);
+                GUI.Label(new Rect(r.x + pad, r.y + pad, w - pad * 2f, titleH), _title, _titleStyle);
                 for (int i = 0; i < _lines.Count; i++)
-                    GUI.Label(new Rect(r.x + 14f, r.y + 8f + titleH + lineH * i, w - 28f, lineH), _lines[i], _lineStyle);
+                    GUI.Label(new Rect(r.x + pad, r.y + pad + titleH + lineH * i, w - pad * 2f, lineH), _lines[i], _lineStyle);
             }
             catch (Exception e)
             {
@@ -289,9 +289,9 @@ namespace TCGCardTracker
             bg.SetPixel(0, 0, new Color(0.08f, 0.09f, 0.12f, 0.92f));
             bg.Apply();
             _box.normal.background = bg;
-            _titleStyle = new GUIStyle(skin.label) { fontSize = 15, fontStyle = FontStyle.Bold, wordWrap = false };
+            _titleStyle = new GUIStyle(skin.label) { fontSize = 26, fontStyle = FontStyle.Bold, wordWrap = false };
             _titleStyle.normal.textColor = new Color(1f, 0.84f, 0.35f);
-            _lineStyle = new GUIStyle(skin.label) { fontSize = 13, wordWrap = false, clipping = TextClipping.Clip };
+            _lineStyle = new GUIStyle(skin.label) { fontSize = 20, wordWrap = false, clipping = TextClipping.Clip };
             _lineStyle.normal.textColor = Color.white;
         }
     }

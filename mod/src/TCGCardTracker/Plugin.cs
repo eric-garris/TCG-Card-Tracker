@@ -22,6 +22,8 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> ShowCopies = null!;
         internal static ConfigEntry<bool> ShowPictures = null!;
         internal static ConfigEntry<bool> NewCardPopup = null!;
+        internal static ConfigEntry<float> PopupSeconds = null!;
+        internal static ConfigEntry<float> PopupScale = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -53,6 +55,10 @@ namespace TCGCardTracker
                 "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade), " +
                 "and flag a customer's trade or sale offer for such a card. " +
                 "This is the only part of the mod that hooks the game's code; when it is off at startup, the hooks are not installed at all.");
+            PopupSeconds = Config.Bind("General", "PopupSeconds", 12f,
+                "How long the new-card popup stays on screen, in seconds (2 - 120). Each extra card listed adds a second.");
+            PopupScale = Config.Bind("General", "PopupScale", 1f,
+                "Size of the new-card popup (0.5 - 3). It already grows with your screen resolution.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
