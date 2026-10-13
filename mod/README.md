@@ -25,10 +25,15 @@ Press **F7** in your shop to open it.
   it stays and how big it is.
 - Custom card sets added by a card-set mod such as [TCG Studio](https://github.com/GrimGrab/TCG-Studio)
   are tracked too, and count for the new-card popup.
+- **TCG Studio cards in trades:** on its own, TCG Studio only lets customers bring its cards to
+  trade or sell when the vanilla sets are hidden. With TCG Studio installed, this mod gives each
+  trading or selling customer a `CustomTradeChance` (25% by default) of bringing a card from one of
+  your custom sets instead, while the vanilla sets stay on. Set it to 0 to turn this off.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
-- It never changes your save or your cards. The new-card popup is the only part that hooks the
-  game's code (pack opening and the trade screen), and it only reads; with `NewCardPopup` off the
-  hooks aren't installed.
+- It never changes your save or your cards. The new-card popup hooks the game's code (pack opening
+  and the trade screen) and only reads; with `NewCardPopup` off those hooks aren't installed. The
+  one thing it changes is which set a trading customer's card comes from, and only with TCG Studio
+  installed and `CustomTradeChance` above 0.
 
 ## Install
 
@@ -41,7 +46,8 @@ Press **F7** in your shop to open it.
 
 Settings are in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), which places are counted, and `LiveShelves` there.
+(`NewCardPopup`), TCG Studio cards in trades (`CustomTradeChance`), which places are counted, and
+`LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.
 

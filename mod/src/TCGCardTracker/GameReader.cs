@@ -137,11 +137,8 @@ namespace TCGCardTracker
             var editions = new string[6];
             for (int b = 0; b < editions.Length; b++)
                 editions[b] = BorderName(0, b, false) ?? StandardEditions[b];
-            for (int e = CustomExpansionBase; e < CustomExpansionLimit; e++)
+            foreach (var (e, shown) in CustomShownLists())
             {
-                int[] shown = ShownMonsters(e, quiet: true);
-                // Without a set mod the game falls back to a vanilla list here, so only ids in the custom range count.
-                if (shown.Length == 0 || Array.Exists(shown, id => id < CustomMonsterBase)) yield break;
                 yield return new SetDef
                 {
                     Key = "custom" + e,
@@ -153,6 +150,26 @@ namespace TCGCardTracker
                     Editions = editions,
                 };
             }
+        }
+
+        /// <summary>Each custom set's expansion int with its shown monster list, in order. None without a set mod.</summary>
+        private static IEnumerable<(int expansion, int[] shown)> CustomShownLists()
+        {
+            for (int e = CustomExpansionBase; e < CustomExpansionLimit; e++)
+            {
+                int[] shown = ShownMonsters(e, quiet: true);
+                // Without a set mod the game falls back to a vanilla list here, so only ids in the custom range count.
+                if (shown.Length == 0 || Array.Exists(shown, id => id < CustomMonsterBase)) yield break;
+                yield return (e, shown);
+            }
+        }
+
+        /// <summary>The expansion ints of the custom sets a set mod has added.</summary>
+        public static List<int> CustomExpansions()
+        {
+            var list = new List<int>();
+            foreach (var (e, _) in CustomShownLists()) list.Add(e);
+            return list;
         }
 
         private static string ExpansionName(int expansion)
