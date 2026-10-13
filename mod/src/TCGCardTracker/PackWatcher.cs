@@ -8,12 +8,11 @@ using UnityEngine;
 namespace TCGCardTracker
 {
     /// <summary>
-    /// "New for your collection": the only places the mod hooks the game. A prefix on
+    /// "New for your collection" after opening packs. A prefix on
     /// CardOpeningSequence.GetPackContent (the pack roll) snapshots what you own; once the opening
     /// screen closes, a second read shows which cards are new, or now owned at a better grade, and a
-    /// short toast lists them. A postfix on CustomerTradeCardScreen.SetCustomer does the same for the
-    /// card a customer offers to trade or sell. The hooks only read, and any error is logged while the
-    /// game carries on.
+    /// short toast lists them. The hook only reads, and any error is logged while the game carries on.
+    /// Trade offers get their own banners instead (TradeBanner).
     /// </summary>
     internal static class PackWatcher
     {
@@ -43,27 +42,26 @@ namespace TCGCardTracker
                 Plugin.Log.LogWarning("Could not start Harmony; the new-card popup is off: " + e.Message);
                 return;
             }
-            Patch(harmony, typeof(CardOpeningSequence), "GetPackContent", nameof(BeforeRoll), prefix: true, "pack opening");
-            Patch(harmony, typeof(CustomerTradeCardScreen), "SetCustomer", nameof(AfterOffer), prefix: false, "trade offers");
+            Patch(harmony, typeof(CardOpeningSequence), "GetPackContent", typeof(PackWatcher), nameof(BeforeRoll), prefix: true, "the new-card popup", "pack opening");
         }
 
-        private static void Patch(Harmony harmony, Type type, string method, string handler, bool prefix, string what)
+        internal static void Patch(Harmony harmony, Type type, string method, Type owner, string handler, bool prefix, string feature, string what)
         {
             try
             {
                 var target = AccessTools.Method(type, method);
                 if (target == null)
                 {
-                    Plugin.Log.LogWarning($"Could not find the game's {type.Name}.{method}; the new-card popup won't cover {what}.");
+                    Plugin.Log.LogWarning($"Could not find the game's {type.Name}.{method}; {feature} won't cover {what}.");
                     return;
                 }
-                var patch = new HarmonyMethod(typeof(PackWatcher), handler);
+                var patch = new HarmonyMethod(owner, handler);
                 if (prefix) harmony.Patch(target, prefix: patch);
                 else harmony.Patch(target, postfix: patch);
             }
             catch (Exception e)
             {
-                Plugin.Log.LogWarning($"Could not hook {what}; the new-card popup won't cover them: " + e.Message);
+                Plugin.Log.LogWarning($"Could not hook {what}; {feature} won't cover it: " + e.Message);
             }
         }
 
@@ -84,7 +82,7 @@ namespace TCGCardTracker
             {
                 // A multi-pack rolls several times on one screen: keep the snapshot from the first.
                 if (_before != null || !Plugin.NewCardPopup.Value || !GameReader.IsReady()) return;
-                _before = Snapshot();
+                _before = Snapshot(out _);
                 _sequence = __instance;
                 _rolledAt = Time.realtimeSinceStartup;
                 _sawScreen = false;
@@ -97,42 +95,10 @@ namespace TCGCardTracker
             }
         }
 
-        /// <summary>
-        /// Harmony postfix on the trade screen opening for a customer. The customer's card is the left one
-        /// (m_CardData_L) whether they trade or sell, read from the trade data passed in, else from the
-        /// screen. Fields are read by name, so a renamed one is just skipped.
-        /// </summary>
-        private static void AfterOffer(CustomerTradeCardScreen __instance, object[] __args)
-        {
-            try
-            {
-                if (!Plugin.NewCardPopup.Value || !GameReader.IsReady()) return;
-                object source = __instance;
-                foreach (var a in __args)
-                    if (a is CustomerTradeData) source = a;
-                var offer = Traverse.Create(source);
-                var offered = offer.Field("m_CardData_L").GetValue() as CardData;
-                if (offered == null || (int)offered.monsterType <= 0) return;
-                bool trading = offer.Field("m_IsTrading").GetValue() as bool? ?? true;
-
-                var owned = Snapshot();
-                var card = _catalog!.FromPhysical((int)offered.expansionType, (int)offered.monsterType, (int)offered.borderType, offered.isFoil, offered.isDestiny);
-                if (card == null) return;
-                var gain = CardQueries.GainFrom(owned, card, Collection.ColumnOf(offered.cardGrade));
-                if (gain == null) return;
-                Plugin.Log.LogInfo($"{(trading ? "Trade" : "Sale")} offer is new for your collection: {card.Label}");
-                Toast.Show(new List<Gain> { gain.Value }, trading ? "Trade offer" : "Sale offer");
-            }
-            catch (Exception e)
-            {
-                Plugin.LogOnce("trade-offer", "New-card popup could not check a trade offer: " + e);
-            }
-        }
-
         /// <summary>What you own now, refreshing the shelves from the shop at most once a minute.</summary>
-        private static int[] Snapshot()
+        internal static int[] Snapshot(out Catalog catalog)
         {
-            _catalog ??= GameReader.BuildCatalog();
+            catalog = _catalog ??= GameReader.BuildCatalog();
             if (Plugin.LiveShelves.Value && Time.realtimeSinceStartup - _shelvesRefreshedAt >= ShelfRefreshEvery)
             {
                 GameReader.RefreshShelfData();
@@ -208,8 +174,8 @@ namespace TCGCardTracker
 
         public void Clear() => _until = -1f;
 
-        /// <summary>Lists the gains; `source` (e.g. "Trade offer") prefixes the title.</summary>
-        public void Show(List<Gain> gains, string? source = null)
+        /// <summary>Lists the gains.</summary>
+        public void Show(List<Gain> gains)
         {
             _lines.Clear();
             int news = 0;
@@ -218,7 +184,6 @@ namespace TCGCardTracker
             _title = news == gains.Count ? (news == 1 ? "New for your collection" : $"{news} new for your collection")
                 : news == 0 ? "New best grade"
                 : $"New for your collection: {news} new, {gains.Count - news} better grade";
-            if (source != null) _title = source + ": " + (news == 0 ? "better grade than yours" : "new for your collection");
             for (int i = 0; i < gains.Count && i < MaxLines; i++)
                 _lines.Add(Line(gains[i]));
             if (gains.Count > MaxLines) _lines.Add($"and {gains.Count - MaxLines} more (F7 to see your collection)");
