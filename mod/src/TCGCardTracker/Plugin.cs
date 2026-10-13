@@ -13,7 +13,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.4.0";
+        public const string Version = "0.5.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -21,6 +21,9 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> LiveShelves = null!;
         internal static ConfigEntry<bool> ShowCopies = null!;
         internal static ConfigEntry<bool> ShowPictures = null!;
+        internal static ConfigEntry<bool> NewCardPopup = null!;
+        internal static ConfigEntry<float> PopupSeconds = null!;
+        internal static ConfigEntry<float> PopupScale = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -48,6 +51,14 @@ namespace TCGCardTracker
                 "Show a picture of each card in the card list, drawn by the game itself. Hover a picture to enlarge it, click to pin it.");
             LiveShelves = Config.Bind("General", "LiveShelves", true,
                 "Re-read display shelves, storage and boxes from the shop when the tracker opens or refreshes. Turn off to use the last save instead.");
+            NewCardPopup = Config.Bind("General", "NewCardPopup", true,
+                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade), " +
+                "and flag a customer's trade or sale offer for such a card. " +
+                "This is the only part of the mod that hooks the game's code; when it is off at startup, the hooks are not installed at all.");
+            PopupSeconds = Config.Bind("General", "PopupSeconds", 12f,
+                "How long the new-card popup stays on screen, in seconds (2 - 120). Each extra card listed adds a second.");
+            PopupScale = Config.Bind("General", "PopupScale", 1f,
+                "Size of the new-card popup (0.5 - 3). It already grows with your screen resolution.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
@@ -57,6 +68,7 @@ namespace TCGCardTracker
             // title screen that getter creates phantom game managers.
             Runner.Spawn();
             SceneManager.sceneLoaded += OnSceneLoaded;
+            if (NewCardPopup.Value) PackWatcher.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
@@ -64,6 +76,7 @@ namespace TCGCardTracker
         private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             Runner.Window.ForceClose();
+            PackWatcher.Reset();
             Runner.Spawn();
             Runner.AttachToGameHost();
         }
@@ -137,12 +150,21 @@ namespace TCGCardTracker
             {
                 Plugin.LogOnce("update", "Tracker update failed: " + e);
             }
+            try
+            {
+                PackWatcher.Tick();
+            }
+            catch (System.Exception e)
+            {
+                Plugin.LogOnce("pack-update", "New-card popup update failed: " + e);
+            }
         }
 
         private void OnGUI()
         {
             if (_driver != this) return;
             Window.Draw();
+            PackWatcher.Toast.Draw();
         }
 
         private void OnDestroy()

@@ -161,6 +161,47 @@ namespace TCGCardTracker.Tests
         }
 
         [Fact]
+        public void GainsListNewCardsAndBetterGrades()
+        {
+            var before = new Collection(Cat);
+            before.AddCompact(Loc.Storage, new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 1 });
+            before.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 1, Amount = 9, GradedIndex = 1 });
+            var after = new Collection(Cat);
+            after.AddCompact(Loc.Storage, new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 1 });
+            after.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 1, Amount = 9, GradedIndex = 1 });
+            after.AddPhysical(Loc.Hand, new PhysicalRec { Expansion = 0, Monster = 1, Border = 0, Grade = 0 }); // another ungraded Pigni Basic
+            after.AddPhysical(Loc.Hand, new PhysicalRec { Expansion = 0, Monster = 1, Border = 1, Grade = 0 }); // Pigni First Edition: already owned at grade 9
+            after.AddCompact(Loc.Openers, new CompactRec { Expansion = 0, SaveIndex = 2, Amount = 2 }); // new: Pigni Silver x2
+            after.AddCompact(Loc.Boxes, new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 7, GradedIndex = 5 }); // Pigni Basic, first grade
+
+            var gains = CardQueries.Gains(Cat, before.Combine(All), after.Combine(All));
+
+            Assert.Equal(2, gains.Count);
+            Assert.Equal((0, false, 7, 1), (gains[0].Card.SaveIndex, gains[0].IsNew, gains[0].BestCol, gains[0].Copies));
+            Assert.Equal((2, true, 0, 2), (gains[1].Card.SaveIndex, gains[1].IsNew, gains[1].BestCol, gains[1].Copies));
+            Assert.Empty(CardQueries.Gains(Cat, after.Combine(All), after.Combine(All)));
+        }
+
+        [Fact]
+        public void OfferedCardIsAGainOnlyWhenNewOrBetter()
+        {
+            var c = new Collection(Cat);
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 6, GradedIndex = 1 });
+            var totals = c.Combine(All);
+            var owned = Cat.FromCompact(0, 0, false)!;
+            var missing = Cat.FromCompact(0, 1, false)!;
+
+            Assert.Null(CardQueries.GainFrom(totals, owned, Collection.ColumnOf(0)));
+            Assert.Null(CardQueries.GainFrom(totals, owned, Collection.ColumnOf(6)));
+            var better = CardQueries.GainFrom(totals, owned, Collection.ColumnOf(8))!.Value;
+            Assert.Equal((false, 8), (better.IsNew, better.BestCol));
+            var fresh = CardQueries.GainFrom(totals, missing, Collection.ColumnOf(0))!.Value;
+            Assert.Equal((true, 0), (fresh.IsNew, fresh.BestCol));
+            Assert.Equal(10, Collection.ColumnOf(42));
+            Assert.Equal(Collection.ColOther, Collection.ColumnOf(250000));
+        }
+
+        [Fact]
         public void SearchMatchesNameEditionAndNumber()
         {
             var burpigGoldFoil = Cat.FromCompact(0, 21, false)!; // #2
