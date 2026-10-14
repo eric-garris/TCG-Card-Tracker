@@ -11,11 +11,13 @@ namespace TCGCardTracker
     [BepInPlugin(Guid, Name, Version)]
     // Load after TCG Studio when it is installed, so its trade hook exists to patch.
     [BepInDependency(CustomTrades.StudioGuid, BepInDependency.DependencyFlags.SoftDependency)]
+    // And after Point And Slots, so its catalog exists to patch.
+    [BepInDependency(PointAndSlots.Guid, BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.7.0";
+        public const string Version = "0.8.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -28,6 +30,9 @@ namespace TCGCardTracker
         internal static ConfigEntry<float> PopupSeconds = null!;
         internal static ConfigEntry<float> PopupScale = null!;
         internal static ConfigEntry<float> CustomTradeChance = null!;
+        internal static ConfigEntry<bool> PointAndSlotsSets = null!;
+        internal static ConfigEntry<bool> PointAndSlotsRarities = null!;
+        internal static ConfigEntry<string> PointAndSlotsAdded = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -70,6 +75,16 @@ namespace TCGCardTracker
                 "With TCG Studio installed: the chance (0 - 1) that a customer who comes to trade or sell brings a card from one of " +
                 "its custom sets instead of a vanilla one. 0 leaves trades as TCG Studio makes them. " +
                 "This hooks TCG Studio's trade code, and only when TCG Studio is installed.");
+            PointAndSlotsSets = Config.Bind("Point And Slots", "CustomSets", true,
+                "With TCG Studio and the Point And Slots mod installed: put TCG Studio's sets in Point And Slots' point shop and " +
+                "slot machine (a set counts as unlocked once you own one of its pack licenses), with their real set and rarity names. " +
+                "This hooks Point And Slots' code; when it is off at startup, the hook is not installed at all.");
+            PointAndSlotsRarities = Config.Bind("Point And Slots", "AddRarities", true,
+                "Add TCG Studio rarity names that Point And Slots doesn't list yet to its PromoRarities and ShopEligibleRarities " +
+                "settings, with a ShopCostByRarity price by how rare they are in their set. Each name is added once: " +
+                "delete one there and it stays deleted.");
+            PointAndSlotsAdded = Config.Bind("Point And Slots", "AddedRarities", "",
+                "Rarity names already added to Point And Slots' settings, so they aren't added again. Clear to add them all again.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
@@ -82,6 +97,7 @@ namespace TCGCardTracker
             if (NewCardPopup.Value) PackWatcher.Install();
             if (TradeBanners.Value) TradeBanner.Install();
             CustomTrades.Install();
+            if (PointAndSlotsSets.Value) PointAndSlots.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }

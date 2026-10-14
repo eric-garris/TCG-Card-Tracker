@@ -15,7 +15,7 @@ namespace TCGCardTracker
     internal static class CustomTrades
     {
         internal const string StudioGuid = "tcgcustomcards";
-        private const string StudioHook = "TCGCustomCards.Runtime.VanillaFilter";
+        internal const string StudioHook = "TCGCustomCards.Runtime.VanillaFilter";
 
         private static readonly Random Rng = new Random();
 
