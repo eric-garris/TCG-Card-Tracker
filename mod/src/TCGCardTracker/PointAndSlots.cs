@@ -49,6 +49,7 @@ namespace TCGCardTracker
                 var harmony = new Harmony(Plugin.Guid);
                 Patch(harmony, catalog, "GetAllCards", nameof(AfterGetAllCards), required: true);
                 Patch(harmony, catalog, "IsExpansionUnlocked", nameof(AfterIsExpansionUnlocked), required: true);
+                Patch(harmony, catalog, "GetUnlockedCards", nameof(AfterGetUnlockedCards));
                 Patch(harmony, AccessTools.TypeByName(Naming), "GetPrettyName", nameof(AfterGetPrettyName), required: true);
                 Patch(harmony, AccessTools.TypeByName(Shop), "PrettyExpansionName", nameof(AfterPrettyExpansionName));
                 Patch(harmony, AccessTools.TypeByName(Shop), "GetModGroupFor", nameof(AfterGroup));
@@ -90,8 +91,12 @@ namespace TCGCardTracker
 
                 bool eplMissing = Field("_cache").GetValue(null) == null;
                 var expansions = new HashSet<ECardExpansionType>();
+                int before = list.Count;
                 if (eplMissing) AddBaseGameCards(list, expansions);
+                int baseCards = list.Count - before;
                 if (!HasCustomCards(list)) AddCustomCards(list, custom, expansions);
+                Plugin.Log.LogInfo($"Point And Slots catalog: {before} cards of its own, {baseCards} base-game cards and " +
+                    $"{list.Count - before - baseCards} TCG Studio cards added ({custom.Count} sets, {RarityNames.Count} rarities).");
                 _augmented = list;
 
                 var known = Field("_catalogExpansions").GetValue(null) as List<ECardExpansionType> ?? new List<ECardExpansionType>();
@@ -195,6 +200,20 @@ namespace TCGCardTracker
 
         private static BepInEx.Configuration.ConfigEntry<T>? Setting<T>(object config, string field) =>
             AccessTools.Field(config.GetType(), field)?.GetValue(config) as BepInEx.Configuration.ConfigEntry<T>;
+
+        private static object? _reportedUnlocked;
+
+        /// <summary>Postfix on PromoCardCatalog.GetUnlockedCards: logs, once per list, how many cards it counts as unlocked.</summary>
+        private static void AfterGetUnlockedCards(object __result)
+        {
+            if (!(__result is IList list) || ReferenceEquals(list, _reportedUnlocked) || _augmented == null) return;
+            _reportedUnlocked = list;
+            var expansionProp = AccessTools.Property(_entry, "ExpansionType");
+            var sets = new HashSet<int>();
+            foreach (var item in list)
+                if (item != null) sets.Add((int)(ECardExpansionType)expansionProp.GetValue(item));
+            Plugin.Log.LogInfo($"Point And Slots counts {list.Count} cards as unlocked, in sets: {string.Join(", ", sets.OrderBy(e => e))}.");
+        }
 
         /// <summary>Postfix on PromoCardCatalog.IsExpansionUnlocked: a custom set is unlocked when one of its pack licenses is.</summary>
         private static void AfterIsExpansionUnlocked(ECardExpansionType expansion, ref bool __result)
