@@ -47,6 +47,7 @@ namespace TCGCardTracker
                 var harmony = new Harmony(Plugin.Guid);
                 InstallArtExpander(harmony);
                 InstallAwards(harmony);
+                if (Plugin.PointAndSlotsKeepPoints.Value) InstallKeepPoints(harmony);
                 if (!Plugin.PointAndSlotsSets.Value || AccessTools.TypeByName(CustomTrades.StudioHook) == null) return; // No TCG Studio sets to add.
                 _catalog = catalog;
 
@@ -65,6 +66,47 @@ namespace TCGCardTracker
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("Could not hook Point And Slots; TCG Studio sets stay out of it: " + e.Message);
+            }
+        }
+
+        // Point And Slots keeps a points balance per save slot. When the game saves to another slot than the one loaded
+        // (the autosave, slot 0), its SaveGameSlot first swaps in that slot's old balance, so points earned since
+        // loading are lost. A prefix makes the slot being saved the active one, so the current balance is written there.
+        private static void InstallKeepPoints(Harmony harmony)
+        {
+            try
+            {
+                var manager = AccessTools.TypeByName("PromoRewardsMod.Core.PromoPointsManager");
+                var save = manager == null ? null : AccessTools.Method(manager, "SaveGameSlot", new[] { typeof(int) });
+                _activeSlot = manager == null ? null : AccessTools.Field(manager, "_activeSlotId");
+                if (save == null || _activeSlot == null)
+                {
+                    Plugin.Log.LogWarning("Point And Slots changed: could not keep its points balance across save slots.");
+                    return;
+                }
+                harmony.Patch(save, prefix: new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeSaveGameSlot)));
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Could not keep Point And Slots' points across save slots: " + e.Message);
+            }
+        }
+
+        private static FieldInfo? _activeSlot;
+
+        private static void BeforeSaveGameSlot(object __instance, int slotIndex)
+        {
+            try
+            {
+                string slot = slotIndex.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var active = _activeSlot!.GetValue(__instance) as string;
+                if (string.IsNullOrEmpty(active) || active == slot) return; // Nothing loaded yet, or the same slot.
+                _activeSlot.SetValue(__instance, slot);
+                Plugin.Log.LogInfo($"Point And Slots: the game saved to slot {slotIndex} (loaded from slot {active}); your points balance goes with it.");
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pas:keep-points", "Could not keep Point And Slots' points across save slots: " + e.Message);
             }
         }
 

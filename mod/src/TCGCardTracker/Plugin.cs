@@ -34,6 +34,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> PointAndSlotsRarities = null!;
         internal static ConfigEntry<string> PointAndSlotsAdded = null!;
         internal static ConfigEntry<bool> PointAndSlotsVariants = null!;
+        internal static ConfigEntry<bool> PointAndSlotsKeepPoints = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -90,6 +91,10 @@ namespace TCGCardTracker
                 "With the Point And Slots mod installed: a card bought in its point shop or won on its slot machine comes as a " +
                 "random version (border and foil) with the same odds as a pack, instead of always the base card. The shop " +
                 "still shows the base card. Only the versions a TCG Studio set has are given out.");
+            PointAndSlotsKeepPoints = Config.Bind("Point And Slots", "KeepPointsOnSave", true,
+                "With the Point And Slots mod installed: when the game saves to another slot than the one you loaded (such as " +
+                "the autosave), keep your current points balance and save it with that slot. Point And Slots on its own swaps in " +
+                "that slot's old balance, losing the points earned since loading.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
