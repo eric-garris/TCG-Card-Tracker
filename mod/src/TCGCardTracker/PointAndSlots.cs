@@ -42,11 +42,13 @@ namespace TCGCardTracker
             try
             {
                 var catalog = AccessTools.TypeByName(Catalog);
-                if (catalog == null || AccessTools.TypeByName(CustomTrades.StudioHook) == null) return; // Either mod missing: nothing to do.
-                _catalog = catalog;
+                if (catalog == null) return; // Point And Slots missing: nothing to do.
                 _entry = AccessTools.TypeByName(EntryType);
-
                 var harmony = new Harmony(Plugin.Guid);
+                InstallArtExpander(harmony);
+                if (AccessTools.TypeByName(CustomTrades.StudioHook) == null) return; // No TCG Studio sets to add.
+                _catalog = catalog;
+
                 Patch(harmony, catalog, "GetAllCards", nameof(AfterGetAllCards), required: true);
                 Patch(harmony, catalog, "IsExpansionUnlocked", nameof(AfterIsExpansionUnlocked), required: true);
                 Patch(harmony, catalog, "GetUnlockedCards", nameof(AfterGetUnlockedCards));
@@ -62,6 +64,69 @@ namespace TCGCardTracker
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("Could not hook Point And Slots; TCG Studio sets stay out of it: " + e.Message);
+            }
+        }
+
+        // Art Expander (plugin "ArtExpander") swaps card art only inside CardUI.SetCardUI, so Point And Slots, which
+        // draws MonsterData.GetIcon straight into its own images, still shows the game's own art.
+        private static object[] _artCaches = Array.Empty<object>();
+        private static MethodInfo _resolveArt = null!, _loadArt = null!;
+        private static FieldInfo? _resolvedIcon;
+        private static readonly Dictionary<(int, int), Sprite?> ArtSprites = new Dictionary<(int, int), Sprite?>();
+
+        private static void InstallArtExpander(Harmony harmony)
+        {
+            try
+            {
+                var plugin = AccessTools.TypeByName("ArtExpander.Plugin");
+                var cacheType = AccessTools.TypeByName("ArtExpander.Core.ArtCache");
+                var probe = _entry == null ? null : AccessTools.Method(_entry, "TryGetCachedIcon");
+                if (plugin == null || cacheType == null || probe == null) return;
+                // Same order Art Expander itself uses: loose files first, then its asset bundle.
+                _artCaches = new[] { "art_cache_directory", "art_cache_bundle" }
+                    .Select(f => AccessTools.Field(plugin, f)?.GetValue(null)).Where(c => c != null).ToArray()!;
+                _resolveArt = AccessTools.Method(cacheType, "ResolveArtPath");
+                _loadArt = AccessTools.Method(cacheType, "LoadSprite");
+                _resolvedIcon = AccessTools.Field(_entry, "_resolvedIcon");
+                if (_artCaches.Length == 0 || _resolveArt == null || _loadArt == null) return;
+                harmony.Patch(probe, postfix: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterTryGetCachedIcon)));
+                Plugin.Log.LogInfo("Art Expander art added to Point And Slots.");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Could not give Point And Slots Art Expander's art: " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Postfix on PromoCatalogEntry.TryGetCachedIcon: Art Expander's picture for the card Point And Slots gives out
+        /// (base border, not foil), when it has one, also kept as the entry's resolved icon.
+        /// </summary>
+        private static void AfterTryGetCachedIcon(object __instance, ref Sprite __result)
+        {
+            try
+            {
+                var entry = Traverse.Create(__instance);
+                var expansion = entry.Property("ExpansionType").GetValue<ECardExpansionType>();
+                var monster = entry.Property("MonsterType").GetValue<EMonsterType>();
+                var key = ((int)expansion, (int)monster);
+                if (!ArtSprites.TryGetValue(key, out var art))
+                {
+                    art = null;
+                    foreach (var cache in _artCaches)
+                    {
+                        var path = _resolveArt.Invoke(cache, new object[] { monster, ECardBorderType.Base, expansion, false, false }) as string;
+                        if (!string.IsNullOrEmpty(path) && (art = _loadArt.Invoke(cache, new object[] { path! }) as Sprite) != null) break;
+                    }
+                    ArtSprites[key] = art;
+                }
+                if (art == null || __result == art) return;
+                __result = art;
+                _resolvedIcon?.SetValue(__instance, art);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pas:art", "Could not read Art Expander's art for Point And Slots: " + e.Message);
             }
         }
 
