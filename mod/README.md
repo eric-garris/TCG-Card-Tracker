@@ -41,6 +41,8 @@ Press **F7** in your shop to open it.
   they are in their set; delete one there and it stays deleted. If Enhanced Prefab Loader isn't
   loaded, Point And Slots normally shows no sets at all; this also gives it the base-game sets.
   Turn it off with `[Point And Slots] CustomSets`, or just the rarity names with `AddRarities`.
+  With the Art Expander mod installed, the shop and slot
+  machine show its art for base-game cards too.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
