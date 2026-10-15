@@ -78,8 +78,8 @@ namespace TCGCardTracker
         }
 
         /// <summary>
-        /// Postfix on PromoCardCatalog.GetAllCards: once per catalog list, add the custom sets' cards. When EPL is
-        /// missing the catalog comes back empty and uncached; then the base-game cards are added too and the list cached.
+        /// Postfix on PromoCardCatalog.GetAllCards: once per catalog list, add the custom sets' cards, and the base-game
+        /// cards when it has none. When EPL is missing the catalog comes back empty and uncached; then the list is cached.
         /// </summary>
         private static void AfterGetAllCards(object __result)
         {
@@ -92,9 +92,9 @@ namespace TCGCardTracker
                 bool eplMissing = Field("_cache").GetValue(null) == null;
                 var expansions = new HashSet<ECardExpansionType>();
                 int before = list.Count;
-                if (eplMissing) AddBaseGameCards(list, expansions);
+                if (!HasCards(list, e => e < GameReader.CustomExpansionBase && e >= 0 && e < 8)) AddBaseGameCards(list, expansions);
                 int baseCards = list.Count - before;
-                if (!HasCustomCards(list)) AddCustomCards(list, custom, expansions);
+                if (!HasCards(list, e => e >= GameReader.CustomExpansionBase)) AddCustomCards(list, custom, expansions);
                 Plugin.Log.LogInfo($"Point And Slots catalog: {before} cards of its own, {baseCards} base-game cards and " +
                     $"{list.Count - before - baseCards} TCG Studio cards added ({custom.Count} sets, {RarityNames.Count} rarities).");
                 _augmented = list;
@@ -112,50 +112,81 @@ namespace TCGCardTracker
             }
         }
 
+        /// <summary>
+        /// The base-game cards, read the way Point And Slots reads them but through the game's static lookups: its own
+        /// reader goes through InventoryBase.m_Instance, which can be unset (Eric's 1.0 classic build: no base-game cards found).
+        /// </summary>
         private static void AddBaseGameCards(IList list, HashSet<ECardExpansionType> expansions)
         {
-            var monsterTypes = AccessTools.Method(_catalog, "GetBaseGameMonsterTypes");
-            var create = AccessTools.Method(_catalog, "CreateBaseGameEntry");
-            if (!(Field("BaseGameExpansions").GetValue(null) is IEnumerable<ECardExpansionType> baseSets) || monsterTypes == null || create == null) return;
+            var baseSets = Field("BaseGameExpansions").GetValue(null) as IEnumerable<ECardExpansionType>
+                ?? Enumerable.Range(0, 8).Select(i => (ECardExpansionType)i);
+            var data = Inventory() is InventoryBase inventory ? inventory.m_MonsterData_SO : null;
             foreach (var e in baseSets)
             {
-                if (!(monsterTypes.Invoke(null, new object[] { e }) is List<EMonsterType> ids)) continue;
+                // Set 6 keeps its own lists on the monster data asset (fields newer than our build references).
+                var ids = (int)e == 6
+                    ? (data == null ? null : AccessTools.Field(data.GetType(), "m_ShownPOCGList")?.GetValue(data) as List<EMonsterType>)
+                    : SafeShownList(e);
+                var pocg = (int)e == 6 && data != null ? AccessTools.Field(data.GetType(), "m_POCGDataList")?.GetValue(data) as List<MonsterData> : null;
+                if (ids == null) continue;
                 foreach (var id in ids)
                 {
-                    var entry = create.Invoke(null, new object[] { e, id });
-                    if (entry == null) continue;
-                    list.Add(entry);
+                    var monster = (int)e == 6 ? pocg?.FirstOrDefault(m => m != null && m.MonsterType == id) : InventoryBase.GetMonsterData(id);
+                    if (monster == null) continue;
+                    list.Add(NewEntry(e, id, monster));
                     expansions.Add(e);
                 }
             }
-            Plugin.LogOnce("pas-no-epl", "Point And Slots can't reach Enhanced Prefab Loader; the tracker gave it the base-game cards so it still works.");
         }
 
-        /// <summary>True once a list already holds custom cards (a newer Point And Slots reading them itself).</summary>
-        private static bool HasCustomCards(IList list)
+        private static List<EMonsterType>? SafeShownList(ECardExpansionType e)
+        {
+            try
+            {
+                return InventoryBase.GetShownMonsterList(e);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static InventoryBase? _inventory;
+
+        /// <summary>The shop's InventoryBase, found without CSingleton (which would create one outside the shop).</summary>
+        private static InventoryBase? Inventory()
+        {
+            if (_inventory != null) return _inventory;
+            _inventory = InventoryBase.m_Instance != null ? InventoryBase.m_Instance : UnityEngine.Object.FindObjectOfType<InventoryBase>();
+            return _inventory;
+        }
+
+        private static object NewEntry(ECardExpansionType expansion, EMonsterType id, MonsterData monster)
+        {
+            var entry = Activator.CreateInstance(_entry);
+            AccessTools.Property(_entry, "ExpansionType").SetValue(entry, expansion);
+            AccessTools.Property(_entry, "MonsterType").SetValue(entry, id);
+            AccessTools.Property(_entry, "MonsterData").SetValue(entry, monster);
+            return entry;
+        }
+
+        private static bool HasCards(IList list, Func<int, bool> expansion)
         {
             var prop = AccessTools.Property(_entry, "ExpansionType");
             foreach (var item in list)
-                if (item != null && (int)(ECardExpansionType)prop.GetValue(item) >= GameReader.CustomExpansionBase) return true;
+                if (item != null && expansion((int)(ECardExpansionType)prop.GetValue(item))) return true;
             return false;
         }
 
         private static void AddCustomCards(IList list, List<(int expansion, int[] shown)> custom, HashSet<ECardExpansionType> expansions)
         {
-            var expansionProp = AccessTools.Property(_entry, "ExpansionType");
-            var monsterProp = AccessTools.Property(_entry, "MonsterType");
-            var dataProp = AccessTools.Property(_entry, "MonsterData");
             foreach (var (e, shown) in custom)
             {
                 foreach (int id in shown)
                 {
                     var data = InventoryBase.GetMonsterData((EMonsterType)id);
                     if (data == null) continue;
-                    var entry = Activator.CreateInstance(_entry);
-                    expansionProp.SetValue(entry, (ECardExpansionType)e);
-                    monsterProp.SetValue(entry, (EMonsterType)id);
-                    dataProp.SetValue(entry, data);
-                    list.Add(entry);
+                    list.Add(NewEntry((ECardExpansionType)e, (EMonsterType)id, data));
                     expansions.Add((ECardExpansionType)e);
                     int rarity = (int)data.Rarity;
                     if (!RarityNames.ContainsKey(rarity)) RarityNames[rarity] = data.GetRarityName();
@@ -235,7 +266,7 @@ namespace TCGCardTracker
             if (_unlockedFrame == Time.frameCount) return _unlocked;
             var set = new HashSet<int>();
             var licenses = CPlayerData.m_IsItemLicenseUnlocked;
-            var inventory = InventoryBase.m_Instance;
+            var inventory = Inventory();
             var rows = inventory == null || inventory.m_StockItemData_SO == null ? null : inventory.m_StockItemData_SO.m_RestockDataList;
             // License rows line up with the restock list (TCG Studio appends its packs' rows to both).
             for (int i = 0; licenses != null && rows != null && i < licenses.Count && i < rows.Count; i++)
