@@ -143,6 +143,23 @@ namespace TCGCardTracker
             }
         }
 
+        /// <summary>Shows the toast for what was added since <paramref name="before"/> (a Snapshot), e.g. a mod's card reward.</summary>
+        internal static void ShowGainsSince(int[] before, string what)
+        {
+            try
+            {
+                if (_catalog == null || !GameReader.IsReady()) return;
+                var gains = CardQueries.Gains(_catalog, before, Owned(_catalog));
+                if (gains.Count == 0) return;
+                Plugin.Log.LogInfo($"{what}: {gains.Count} new for your collection.");
+                if (Plugin.NewCardPopup.Value) Toast.Show(gains);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("gains:" + what, $"New-card popup could not compare the collection after a {what}: " + e.Message);
+            }
+        }
+
         private static int[] Owned(Catalog catalog) => GameReader.Read(catalog).Combine(Plugin.IncludedLocations());
 
         /// <summary>Kept separate so a game version without IsActive fails here, not in Tick.</summary>

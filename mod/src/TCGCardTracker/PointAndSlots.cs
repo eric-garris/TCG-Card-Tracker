@@ -46,7 +46,8 @@ namespace TCGCardTracker
                 _entry = AccessTools.TypeByName(EntryType);
                 var harmony = new Harmony(Plugin.Guid);
                 InstallArtExpander(harmony);
-                if (AccessTools.TypeByName(CustomTrades.StudioHook) == null) return; // No TCG Studio sets to add.
+                InstallAwards(harmony);
+                if (!Plugin.PointAndSlotsSets.Value || AccessTools.TypeByName(CustomTrades.StudioHook) == null) return; // No TCG Studio sets to add.
                 _catalog = catalog;
 
                 Patch(harmony, catalog, "GetAllCards", nameof(AfterGetAllCards), required: true);
@@ -65,6 +66,121 @@ namespace TCGCardTracker
             {
                 Plugin.Log.LogWarning("Could not hook Point And Slots; TCG Studio sets stay out of it: " + e.Message);
             }
+        }
+
+        // Point And Slots hands out cards in PromoShopScreen.ConfirmPurchase and PromoSlotScreen.AwardRandomPromoCard,
+        // each by CPlayerData.AddCard with a base, non-foil card. While one of those runs, a prefix on AddCard gives
+        // each copy a random version instead, and what you owned before is compared after for the new-card popup.
+        private static bool _awarding;
+        private static int[]? _beforeAward;
+        private static Func<ECardExpansionType, bool[]?> _studioVersions = _ => null;
+
+        private static void InstallAwards(Harmony harmony)
+        {
+            try
+            {
+                var shop = AccessTools.Method(AccessTools.TypeByName(Shop), "ConfirmPurchase");
+                var slots = AccessTools.Method(AccessTools.TypeByName(Slots), "AwardRandomPromoCard");
+                var addCard = AccessTools.Method(typeof(CPlayerData), nameof(CPlayerData.AddCard), new[] { typeof(CardData), typeof(int) });
+                var before = new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeAward));
+                var after = new HarmonyMethod(typeof(PointAndSlots), nameof(AfterAward));
+                foreach (var target in new[] { shop, slots })
+                    if (target != null) harmony.Patch(target, prefix: before, finalizer: after);
+                if (shop == null || slots == null)
+                    Plugin.Log.LogWarning("Point And Slots changed: random card versions and the new-card popup may miss some of its rewards.");
+                if (addCard != null) harmony.Patch(addCard, prefix: new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeAddCard)) { priority = Priority.First });
+                _studioVersions = StudioVersions();
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Could not hook Point And Slots' rewards; they stay base cards with no popup: " + e.Message);
+            }
+        }
+
+        private static void BeforeAward()
+        {
+            _awarding = true;
+            _beforeAward = null;
+            try
+            {
+                if (Plugin.NewCardPopup.Value && GameReader.IsReady()) _beforeAward = PackWatcher.Snapshot(out _);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pas:award-before", "New-card popup could not read the collection before a Point And Slots reward: " + e.Message);
+            }
+        }
+
+        /// <summary>Harmony finalizer, so the award flag is cleared even if Point And Slots throws.</summary>
+        private static void AfterAward()
+        {
+            _awarding = false;
+            var before = _beforeAward;
+            _beforeAward = null;
+            if (before != null) PackWatcher.ShowGainsSince(before, "Point And Slots reward");
+        }
+
+        /// <summary>
+        /// Prefix on CPlayerData.AddCard during a Point And Slots award, run before other mods' prefixes (TCG Studio
+        /// stores its sets' cards in its own prefix): swaps in a copy of the card with a random version, and adds any
+        /// further copies one at a time so each gets its own roll. Never skips the game's code.
+        /// </summary>
+        [HarmonyPriority(Priority.First)]
+        private static void BeforeAddCard(ref CardData cardData, ref int addAmount)
+        {
+            if (!_awarding || !Plugin.PointAndSlotsVariants.Value || cardData == null
+                || cardData.borderType != ECardBorderType.Base || cardData.isFoil || addAmount <= 0) return;
+            try
+            {
+                var baseCard = cardData;
+                var mask = _studioVersions(baseCard.expansionType);
+                cardData = Rolled(baseCard, mask);
+                int extra = addAmount - 1;
+                addAmount = 1;
+                for (int i = 0; i < extra; i++)
+                    CPlayerData.AddCard(Copy(baseCard), 1); // Comes back through here and is rolled on its own.
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pas:variant", "Could not give a Point And Slots reward a random version: " + e.Message);
+            }
+        }
+
+        private static CardData Rolled(CardData card, bool[]? mask)
+        {
+            var (border, foil) = VariantRoll.Roll(() => UnityEngine.Random.Range(0f, 100f), mask);
+            var copy = Copy(card);
+            copy.borderType = (ECardBorderType)border;
+            copy.isFoil = foil;
+            return copy;
+        }
+
+        private static CardData Copy(CardData card) => new CardData
+        {
+            expansionType = card.expansionType,
+            monsterType = card.monsterType,
+            borderType = card.borderType,
+            isFoil = card.isFoil,
+            isDestiny = card.isDestiny,
+            isChampionCard = card.isChampionCard,
+            isNew = card.isNew,
+            cardGrade = card.cardGrade,
+            gradedCardIndex = card.gradedCardIndex,
+        };
+
+        /// <summary>TCG Studio's per-set version list (Registry.Get(expansion).Def.VariantMask), when the set limits it.</summary>
+        private static Func<ECardExpansionType, bool[]?> StudioVersions()
+        {
+            var registry = AccessTools.TypeByName("TCGCustomCards.Runtime.Registry");
+            var get = registry == null ? null : AccessTools.Method(registry, "Get", new[] { typeof(ECardExpansionType) });
+            if (get == null) return _ => null;
+            return expansion =>
+            {
+                if ((int)expansion < GameReader.CustomExpansionBase) return null;
+                var set = get.Invoke(null, new object[] { expansion });
+                var def = set == null ? null : Traverse.Create(set).Field("Def").GetValue();
+                return def == null ? null : Traverse.Create(def).Field("VariantMask").GetValue() as bool[];
+            };
         }
 
         // Art Expander (plugin "ArtExpander") swaps card art only inside CardUI.SetCardUI, so Point And Slots, which

@@ -43,6 +43,10 @@ Press **F7** in your shop to open it.
   Turn it off with `[Point And Slots] CustomSets`, or just the rarity names with `AddRarities`.
   With the Art Expander mod installed, the shop and slot
   machine show its art for base-game cards too.
+- **Point And Slots rewards:** a card bought in its point shop or won on its slot machine comes as a random
+  version (border and foil) with the same odds as a pack, though the shop still shows the base card; a TCG
+  Studio set only gives the versions it has. Turn it off with `[Point And Slots] RandomVersions`. The
+  "new for your collection" popup also shows after these rewards.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
@@ -62,7 +66,7 @@ Press **F7** in your shop to open it.
 
 Settings are in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), which places are counted, and
+(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), which places are counted, and
 `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.

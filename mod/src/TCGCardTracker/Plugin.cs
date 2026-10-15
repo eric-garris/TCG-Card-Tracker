@@ -33,6 +33,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> PointAndSlotsSets = null!;
         internal static ConfigEntry<bool> PointAndSlotsRarities = null!;
         internal static ConfigEntry<string> PointAndSlotsAdded = null!;
+        internal static ConfigEntry<bool> PointAndSlotsVariants = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -61,7 +62,7 @@ namespace TCGCardTracker
             LiveShelves = Config.Bind("General", "LiveShelves", true,
                 "Re-read display shelves, storage and boxes from the shop when the tracker opens or refreshes. Turn off to use the last save instead.");
             NewCardPopup = Config.Bind("General", "NewCardPopup", true,
-                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade). " +
+                "After you open packs or get a Point And Slots reward, briefly list the cards that are new to your collection (or now owned at a better grade). " +
                 "This hooks the game's pack opening; when it is off at startup, the hook is not installed at all.");
             PopupSeconds = Config.Bind("General", "PopupSeconds", 12f,
                 "How long the new-card popup stays on screen, in seconds (2 - 120). Each extra card listed adds a second.");
@@ -85,6 +86,10 @@ namespace TCGCardTracker
                 "delete one there and it stays deleted.");
             PointAndSlotsAdded = Config.Bind("Point And Slots", "AddedRarities", "",
                 "Rarity names already added to Point And Slots' settings, so they aren't added again. Clear to add them all again.");
+            PointAndSlotsVariants = Config.Bind("Point And Slots", "RandomVersions", true,
+                "With the Point And Slots mod installed: a card bought in its point shop or won on its slot machine comes as a " +
+                "random version (border and foil) with the same odds as a pack, instead of always the base card. The shop " +
+                "still shows the base card. Only the versions a TCG Studio set has are given out.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
@@ -97,7 +102,7 @@ namespace TCGCardTracker
             if (NewCardPopup.Value) PackWatcher.Install();
             if (TradeBanners.Value) TradeBanner.Install();
             CustomTrades.Install();
-            if (PointAndSlotsSets.Value) PointAndSlots.Install();
+            PointAndSlots.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
