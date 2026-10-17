@@ -49,6 +49,8 @@ namespace TCGCardTracker
                 InstallAwards(harmony);
                 if (Plugin.PointAndSlotsKeepPoints.Value) InstallKeepPoints(harmony);
                 if (Plugin.PointAndSlotsPackPoints.Value) InstallPackPoints(harmony);
+                var buildSlots = AccessTools.Method(AccessTools.TypeByName(Slots), "BuildUi");
+                if (buildSlots != null) harmony.Patch(buildSlots, postfix: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterBuildSlots)));
                 if (!Plugin.PointAndSlotsSets.Value || AccessTools.TypeByName(CustomTrades.StudioHook) == null) return; // No TCG Studio sets to add.
                 _catalog = catalog;
 
@@ -67,6 +69,25 @@ namespace TCGCardTracker
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("Could not hook Point And Slots; TCG Studio sets stay out of it: " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Postfix on PromoSlotScreen.BuildUi. Its canvas scales a 1280x720 layout by the average of width and height,
+        /// so on a screen wider than 16:9 there are fewer than 720 units of height, and the win screen's card and
+        /// fixed-size text run past the bottom. Expand keeps at least 1280x720 units on every screen.
+        /// </summary>
+        private static void AfterBuildSlots(object __instance)
+        {
+            try
+            {
+                var root = Traverse.Create(__instance).Field("_screenRoot").GetValue<GameObject>();
+                var scaler = root == null ? null : root.GetComponent<UnityEngine.UI.CanvasScaler>();
+                if (scaler != null) scaler.screenMatchMode = UnityEngine.UI.CanvasScaler.ScreenMatchMode.Expand;
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pas:slot-scale", "Could not fit Point And Slots' slot machine to the screen: " + e.Message);
             }
         }
 
