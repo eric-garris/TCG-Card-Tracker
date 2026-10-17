@@ -47,6 +47,7 @@ namespace TCGCardTracker
                 var harmony = new Harmony(Plugin.Guid);
                 InstallArtExpander(harmony);
                 InstallAwards(harmony);
+                InstallSlotVersions(harmony);
                 if (Plugin.PointAndSlotsKeepPoints.Value) InstallKeepPoints(harmony);
                 if (Plugin.PointAndSlotsPackPoints.Value) InstallPackPoints(harmony);
                 var buildSlots = AccessTools.Method(AccessTools.TypeByName(Slots), "BuildUi");
@@ -364,7 +365,9 @@ namespace TCGCardTracker
         /// <summary>Postfix on CPlayerData.AddCard during an award: notes the card as actually added (version rolled).</summary>
         private static void AfterAddCard(CardData cardData, int addAmount)
         {
-            if (_awarding && cardData != null && addAmount > 0) _received.Add((Copy(cardData), addAmount));
+            if (!_awarding || cardData == null || addAmount <= 0) return;
+            _received.Add((Copy(cardData), addAmount));
+            if (_slotAwarding) _slotWon = ((int)cardData.borderType, cardData.isFoil);
         }
 
         /// <summary>The reward popup: every card received, its version, and how many copies are owned now.</summary>
@@ -408,8 +411,24 @@ namespace TCGCardTracker
         [HarmonyPriority(Priority.First)]
         private static void BeforeAddCard(ref CardData cardData, ref int addAmount)
         {
-            if (!_awarding || !Plugin.PointAndSlotsVariants.Value || cardData == null
-                || cardData.borderType != ECardBorderType.Base || cardData.isFoil || addAmount <= 0) return;
+            if (!_awarding || cardData == null || cardData.borderType != ECardBorderType.Base || cardData.isFoil || addAmount <= 0) return;
+            if (_slotVersion is { } fixedVersion)
+            {
+                try
+                {
+                    var (border, foil) = VariantRoll.Fit(fixedVersion.border, fixedVersion.foil, () => UnityEngine.Random.Range(0f, 100f),
+                        _studioVersions(cardData.expansionType));
+                    cardData = Copy(cardData);
+                    cardData.borderType = (ECardBorderType)border;
+                    cardData.isFoil = foil;
+                }
+                catch (Exception e)
+                {
+                    Plugin.LogOnce("pas:slot-version", "Could not give a slot reward its version: " + e.Message);
+                }
+                return;
+            }
+            if (!Plugin.PointAndSlotsVariants.Value) return;
             try
             {
                 var baseCard = cardData;
@@ -423,6 +442,111 @@ namespace TCGCardTracker
             catch (Exception e)
             {
                 Plugin.LogOnce("pas:variant", "Could not give a Point And Slots reward a random version: " + e.Message);
+            }
+        }
+
+        // A slot reward rarity can name a version ("Common - Silver Foil", see SlotVersion). Point And Slots matches
+        // reward rarities to cards by name, so wherever it does, the tracker hands it the rarity alone: its two
+        // "has a card of this rarity" checks, the scan for sets with rewards, and the award itself, which then gets
+        // that version instead of a random one. The win screen names the version won, whichever way it was picked.
+        private static (int border, bool foil)? _slotVersion;
+        private static readonly List<(object rule, string name)> _renamedRules = new List<(object, string)>();
+        private static string? _winRarity, _winLabel;
+        private static bool _slotAwarding;
+        private static (int border, bool foil)? _slotWon;
+
+        private static void InstallSlotVersions(Harmony harmony)
+        {
+            try
+            {
+                var slots = AccessTools.TypeByName(Slots);
+                if (slots == null) return;
+                var plain = new HarmonyMethod(typeof(PointAndSlots), nameof(PlainRarity));
+                foreach (var name in new[] { "HasRarityInExpansion", "HasRarityOutsideExpansion" })
+                {
+                    var method = AccessTools.Method(slots, name);
+                    if (method != null) harmony.Patch(method, prefix: plain);
+                }
+                var restore = new HarmonyMethod(typeof(PointAndSlots), nameof(RestoreRuleNames));
+                var scan = AccessTools.Method(slots, "LoadPromoExpansions");
+                if (scan != null) harmony.Patch(scan, prefix: new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeExpansionScan)), finalizer: restore);
+                var award = AccessTools.Method(slots, "AwardRandomPromoCard");
+                if (award != null) harmony.Patch(award, prefix: new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeSlotAward)), finalizer: restore);
+                var win = AccessTools.Method(slots, "ShowWinReward");
+                if (win != null) harmony.Patch(win, prefix: new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeWinScreen)),
+                    finalizer: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterWinScreen)));
+                var draw = AccessTools.Method(slots, "DrawPixelText");
+                if (draw != null) harmony.Patch(draw, prefix: new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeDrawPixelText)));
+                if (scan == null || award == null) Plugin.Log.LogWarning("Point And Slots changed: slot rewards with a version (\"Common - Silver\") may not work.");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Could not hook Point And Slots for slot rewards with a version: " + e.Message);
+            }
+        }
+
+        private static void PlainRarity(ref string rarityName) => rarityName = SlotVersion.RarityOf(rarityName);
+
+        private static void BeforeExpansionScan(object __instance)
+        {
+            if (Traverse.Create(__instance).Field("_rewardRules").GetValue() is IEnumerable rules)
+                foreach (var rule in rules) Rename(rule);
+        }
+
+        private static void BeforeSlotAward(object __instance)
+        {
+            _slotVersion = null;
+            _slotWon = null;
+            _slotAwarding = true;
+            var rule = Traverse.Create(__instance).Field("_activeRewardRule").GetValue();
+            var name = rule == null ? null : Traverse.Create(rule).Field("RarityName").GetValue<string>();
+            if (SlotVersion.TryParse(name, out _, out var border, out var foil))
+            {
+                _slotVersion = (border, foil);
+                Rename(rule!);
+            }
+        }
+
+        private static void Rename(object rule)
+        {
+            var field = Traverse.Create(rule).Field("RarityName");
+            var name = field.GetValue<string>();
+            if (!SlotVersion.TryParse(name, out var rarity, out _, out _)) return;
+            _renamedRules.Add((rule, name));
+            field.SetValue(rarity);
+        }
+
+        /// <summary>Harmony finalizer: puts the full names back, so the next spin still knows each rule's version.</summary>
+        private static void RestoreRuleNames()
+        {
+            foreach (var (rule, name) in _renamedRules) Traverse.Create(rule).Field("RarityName").SetValue(name);
+            _renamedRules.Clear();
+            _slotVersion = null;
+            _slotAwarding = false;
+        }
+
+        private static void BeforeWinScreen(object __instance)
+        {
+            _winRarity = _winLabel = null;
+            var card = Traverse.Create(__instance).Field("_rewardCard").GetValue();
+            if (card == null || _slotWon == null) return;
+            var (border, foil) = _slotWon.Value;
+            if (border == 0 && !foil) return;
+            var shown = Traverse.Create(card).Property("RarityDisplayName").GetValue<string>();
+            if (string.IsNullOrEmpty(shown)) return;
+            _winRarity = shown.ToUpperInvariant();
+            _winLabel = SlotVersion.WinLabel(shown, border, foil);
+        }
+
+        private static void AfterWinScreen() => _winRarity = _winLabel = null;
+
+        /// <summary>On the win screen, the rarity line ("COMMON") names the version won ("COMMON SILVER FOIL").</summary>
+        private static void BeforeDrawPixelText(ref string value)
+        {
+            if (_winLabel != null && value == _winRarity)
+            {
+                value = _winLabel;
+                _winLabel = null;
             }
         }
 

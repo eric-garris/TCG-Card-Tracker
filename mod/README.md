@@ -58,6 +58,12 @@ Press **F7** in your shop to open it.
 - **Point And Slots payout table:** the slot machine's payout table is a picture, so once it is fully open the
   tracker writes over each row the rarities that combination pays and its chance per spin, worked out from your
   `CombinationRewards` and `LossWeight` settings. Edit those and the table follows.
+- **Point And Slots rewards with a version:** a slot reward rarity in `CombinationRewards` can name the exact
+  version it pays, as `Rarity - Version`: for example `che2|800|Common - First Edition` or
+  `7gold|50|Legendary - Full Art Foil`. The versions are Base, First Edition, Silver, Gold, EX and Full Art, each
+  optionally followed by Foil (`Common - Foil` is a Base foil). Such a reward gives that version rather than a random
+  one; if a TCG Studio set doesn't have it, you get the closest version it has. The slot win screen names the
+  version won.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off

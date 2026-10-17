@@ -31,7 +31,12 @@ namespace TCGCardTracker.Core
             int border = 0;
             foreach (var odds in BorderOdds)
                 if (Has(mask, odds.Key) && percent() < odds.Value) { border = odds.Key; break; }
-            bool foil = percent() < FoilChance;
+            return Fit(border, percent() < FoilChance, percent, mask);
+        }
+
+        /// <summary>The version itself if the set has it, else the same border with the other foil state, else any version it has.</summary>
+        public static (int border, bool foil) Fit(int border, bool foil, Func<float> percent, bool[]? mask = null)
+        {
             if (Allows(mask, border, foil)) return (border, foil);
             if (Allows(mask, border, !foil)) return (border, !foil);
             var allowed = new List<int>();
