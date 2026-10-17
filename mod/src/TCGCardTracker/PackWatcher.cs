@@ -187,6 +187,7 @@ namespace TCGCardTracker
         private string _title = "";
         private float _until = -1f;
         private float _duration;
+        private bool _left;
         private GUIStyle? _box, _titleStyle, _lineStyle;
 
         public void Clear() => _until = -1f;
@@ -195,6 +196,7 @@ namespace TCGCardTracker
         public void Show(List<Gain> gains)
         {
             _lines.Clear();
+            _left = false;
             int news = 0;
             foreach (var g in gains)
                 if (g.IsNew) news++;
@@ -208,10 +210,14 @@ namespace TCGCardTracker
             _until = Time.realtimeSinceStartup + _duration;
         }
 
-        /// <summary>Shows a title and ready-made lines (e.g. what a Point And Slots reward gave).</summary>
-        public void ShowLines(string title, List<string> lines)
+        /// <summary>
+        /// Shows a title and ready-made lines (e.g. what a Point And Slots reward gave); <paramref name="left"/> puts it
+        /// at the left edge, clear of a card shown in the middle of the screen.
+        /// </summary>
+        public void ShowLines(string title, List<string> lines, bool left = false)
         {
             _lines.Clear();
+            _left = left;
             _title = title;
             for (int i = 0; i < lines.Count && i < MaxLines; i++)
                 _lines.Add(lines[i]);
@@ -255,7 +261,8 @@ namespace TCGCardTracker
                 const float pad = 22f, lineH = 30f, titleH = 40f;
                 w = Mathf.Min(w + pad * 2f, sw - 40f);
                 float h = pad + titleH + lineH * _lines.Count + pad;
-                var r = new Rect((sw - w) / 2f, sh * 0.1f, w, h);
+                w = _left ? Mathf.Min(w, sw * 0.35f) : w;
+                var r = _left ? new Rect(20f, (sh - h) / 2f, w, h) : new Rect((sw - w) / 2f, sh * 0.1f, w, h);
 
                 GUI.Box(r, GUIContent.none, _box);
                 GUI.Label(new Rect(r.x + pad, r.y + pad, w - pad * 2f, titleH), _title, _titleStyle);

@@ -75,7 +75,8 @@ namespace TCGCardTracker
         /// <summary>
         /// Postfix on PromoSlotScreen.BuildUi. Its canvas scales a 1280x720 layout by the average of width and height,
         /// so on a screen wider than 16:9 there are fewer than 720 units of height, and the win screen's card and
-        /// fixed-size text run past the bottom. Expand keeps at least 1280x720 units on every screen.
+        /// fixed-size text run past the bottom. Expand keeps at least 1280x720 units on every screen. Also centers the
+        /// win text.
         /// </summary>
         private static void AfterBuildSlots(object __instance)
         {
@@ -84,6 +85,18 @@ namespace TCGCardTracker
                 var root = Traverse.Create(__instance).Field("_screenRoot").GetValue<GameObject>();
                 var scaler = root == null ? null : root.GetComponent<UnityEngine.UI.CanvasScaler>();
                 if (scaler != null) scaler.screenMatchMode = UnityEngine.UI.CanvasScaler.ScreenMatchMode.Expand;
+                // The win screen's pixel text is laid out for a 1120-wide panel from its left edge, but the panel
+                // stretches with the screen, so on a wide screen the text sits left of center. Keep its box 1120 wide
+                // in the middle of the panel.
+                var text = Traverse.Create(__instance).Field("_modalPixelTextRoot").GetValue<Transform>() as RectTransform;
+                if (text != null)
+                {
+                    text.anchorMin = new Vector2(0.5f, 0f);
+                    text.anchorMax = new Vector2(0.5f, 1f);
+                    text.pivot = new Vector2(0.5f, 0.5f);
+                    text.sizeDelta = new Vector2(1120f, 0f);
+                    text.anchoredPosition = Vector2.zero;
+                }
             }
             catch (Exception e)
             {
@@ -296,7 +309,7 @@ namespace TCGCardTracker
                 }
                 if (lines.Count == 0) return;
                 Plugin.Log.LogInfo($"{_rewardTitle}: {string.Join(" | ", lines)}");
-                PackWatcher.Toast.ShowLines(_rewardTitle, lines);
+                PackWatcher.Toast.ShowLines(_rewardTitle, lines, left: true);
             }
             catch (Exception e)
             {
