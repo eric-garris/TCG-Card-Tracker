@@ -305,7 +305,9 @@ namespace TCGCardTracker
                 foreach (var card in order)
                 {
                     bool isNew = CardQueries.HoldingOf(before, card).Copies == 0;
-                    lines.AddRange(Holding.RewardLines(card.Label, card.Set.Name, CardQueries.HoldingOf(now, card), counts[card], isNew));
+                    var price = GameReader.MarketPrice(card, 0); // Rewards come ungraded.
+                    lines.AddRange(Holding.RewardLines(card.Label, card.Set.Name, CardQueries.HoldingOf(now, card), counts[card], isNew,
+                        price.HasValue && price.Value > 0f ? GameReader.PriceString(price.Value) : null));
                 }
                 if (lines.Count == 0) return;
                 Plugin.Log.LogInfo($"{_rewardTitle}: {string.Join(" | ", lines)}");

@@ -21,6 +21,13 @@ namespace TCGCardTracker.Tests
         }
 
         [Fact]
+        public void ShowsTheValueWhenKnown()
+        {
+            Assert.Equal("Roxy · Basic  (PStars)  ·  Worth $1.50", Holding.RewardLines("Roxy · Basic", "PStars", H(2), 1, false, "$1.50")[0]);
+            Assert.Equal("Roxy · Basic  (PStars)  x2  ·  Worth $1.50 each", Holding.RewardLines("Roxy · Basic", "PStars", H(2), 2, false, "$1.50")[0]);
+        }
+
+        [Fact]
         public void SeveralCopiesAndGradedOnes()
         {
             var lines = Holding.RewardLines("Pigni · EX", "Tetramon", H(3, (10, 2)), 2, isNew: false);
