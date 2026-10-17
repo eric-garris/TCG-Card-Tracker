@@ -11,11 +11,13 @@ namespace TCGCardTracker
     [BepInPlugin(Guid, Name, Version)]
     // Load after TCG Studio when it is installed, so its trade hook exists to patch.
     [BepInDependency(CustomTrades.StudioGuid, BepInDependency.DependencyFlags.SoftDependency)]
+    // And after Point And Slots, so its catalog exists to patch.
+    [BepInDependency(PointAndSlots.Guid, BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.7.0";
+        public const string Version = "0.8.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -28,6 +30,12 @@ namespace TCGCardTracker
         internal static ConfigEntry<float> PopupSeconds = null!;
         internal static ConfigEntry<float> PopupScale = null!;
         internal static ConfigEntry<float> CustomTradeChance = null!;
+        internal static ConfigEntry<bool> PointAndSlotsSets = null!;
+        internal static ConfigEntry<bool> PointAndSlotsRarities = null!;
+        internal static ConfigEntry<string> PointAndSlotsAdded = null!;
+        internal static ConfigEntry<bool> PointAndSlotsVariants = null!;
+        internal static ConfigEntry<bool> PointAndSlotsKeepPoints = null!;
+        internal static ConfigEntry<bool> PointAndSlotsPackPoints = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -56,7 +64,8 @@ namespace TCGCardTracker
             LiveShelves = Config.Bind("General", "LiveShelves", true,
                 "Re-read display shelves, storage and boxes from the shop when the tracker opens or refreshes. Turn off to use the last save instead.");
             NewCardPopup = Config.Bind("General", "NewCardPopup", true,
-                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade). " +
+                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade); after a " +
+                "Point And Slots reward, list every card you got with its version and how many copies you now own. " +
                 "This hooks the game's pack opening; when it is off at startup, the hook is not installed at all.");
             PopupSeconds = Config.Bind("General", "PopupSeconds", 12f,
                 "How long the new-card popup stays on screen, in seconds (2 - 120). Each extra card listed adds a second.");
@@ -70,6 +79,28 @@ namespace TCGCardTracker
                 "With TCG Studio installed: the chance (0 - 1) that a customer who comes to trade or sell brings a card from one of " +
                 "its custom sets instead of a vanilla one. 0 leaves trades as TCG Studio makes them. " +
                 "This hooks TCG Studio's trade code, and only when TCG Studio is installed.");
+            PointAndSlotsSets = Config.Bind("Point And Slots", "CustomSets", true,
+                "With TCG Studio and the Point And Slots mod installed: put TCG Studio's sets in Point And Slots' point shop and " +
+                "slot machine (a set counts as unlocked once you own one of its pack licenses), with their real set and rarity names. " +
+                "This hooks Point And Slots' code; when it is off at startup, the hook is not installed at all.");
+            PointAndSlotsRarities = Config.Bind("Point And Slots", "AddRarities", true,
+                "Add TCG Studio rarity names that Point And Slots doesn't list yet to its PromoRarities and ShopEligibleRarities " +
+                "settings, with a ShopCostByRarity price by how rare they are in their set. Each name is added once: " +
+                "delete one there and it stays deleted.");
+            PointAndSlotsAdded = Config.Bind("Point And Slots", "AddedRarities", "",
+                "Rarity names already added to Point And Slots' settings, so they aren't added again. Clear to add them all again.");
+            PointAndSlotsVariants = Config.Bind("Point And Slots", "RandomVersions", true,
+                "With the Point And Slots mod installed: a card bought in its point shop or won on its slot machine comes as a " +
+                "random version (border and foil) with the same odds as a pack, instead of always the base card. The shop " +
+                "still shows the base card. Only the versions a TCG Studio set has are given out.");
+            PointAndSlotsKeepPoints = Config.Bind("Point And Slots", "KeepPointsOnSave", true,
+                "With the Point And Slots mod installed: when the game saves to another slot than the one you loaded (such as " +
+                "the autosave), keep your current points balance and save it with that slot. Point And Slots on its own swaps in " +
+                "that slot's old balance, losing the points earned since loading.");
+            PointAndSlotsPackPoints = Config.Bind("Point And Slots", "PackPoints", true,
+                "With the Point And Slots mod installed: give its PointsPerPackOpened for each pack you open. Point And Slots " +
+                "waits for a game event that some pack openings never send (no points at all); packs it does count are not " +
+                "counted twice.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
@@ -82,6 +113,7 @@ namespace TCGCardTracker
             if (NewCardPopup.Value) PackWatcher.Install();
             if (TradeBanners.Value) TradeBanner.Install();
             CustomTrades.Install();
+            PointAndSlots.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
@@ -168,6 +200,7 @@ namespace TCGCardTracker
             {
                 PackWatcher.Tick();
                 TradeBanner.Tick();
+                PointAndSlots.Tick();
             }
             catch (System.Exception e)
             {

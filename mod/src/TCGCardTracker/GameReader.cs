@@ -56,7 +56,7 @@ namespace TCGCardTracker
         /// Card-set mods such as TCG Studio register their sets as expansion ints from 100 up, with monster ids from
         /// 999,999 up, and answer the game's own lookups (shown list, name, album counts) for them.
         /// </summary>
-        private const int CustomExpansionBase = 100;
+        internal const int CustomExpansionBase = 100;
         private const int CustomExpansionLimit = 400;
         private const int CustomMonsterBase = 999_999;
 
@@ -153,7 +153,7 @@ namespace TCGCardTracker
         }
 
         /// <summary>Each custom set's expansion int with its shown monster list, in order. None without a set mod.</summary>
-        private static IEnumerable<(int expansion, int[] shown)> CustomShownLists()
+        internal static IEnumerable<(int expansion, int[] shown)> CustomShownLists()
         {
             for (int e = CustomExpansionBase; e < CustomExpansionLimit; e++)
             {
@@ -172,7 +172,7 @@ namespace TCGCardTracker
             return list;
         }
 
-        private static string ExpansionName(int expansion)
+        internal static string ExpansionName(int expansion)
         {
             try
             {
