@@ -55,6 +55,9 @@ Press **F7** in your shop to open it.
 - **Point And Slots points for packs:** Point And Slots' points per opened pack depend on a game event that
   not every opening sends, so the tracker counts each pack it sees opened and adds the points it missed (never
   twice). Turn it off with `[Point And Slots] PackPoints`.
+- **Point And Slots payout table:** the slot machine's payout table is a picture, so once it is fully open the
+  tracker writes over each row the rarities that combination pays and its chance per spin, worked out from your
+  `CombinationRewards` and `LossWeight` settings. Edit those and the table follows.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off

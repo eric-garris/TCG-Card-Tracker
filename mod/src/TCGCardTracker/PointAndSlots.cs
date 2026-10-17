@@ -51,6 +51,8 @@ namespace TCGCardTracker
                 if (Plugin.PointAndSlotsPackPoints.Value) InstallPackPoints(harmony);
                 var buildSlots = AccessTools.Method(AccessTools.TypeByName(Slots), "BuildUi");
                 if (buildSlots != null) harmony.Patch(buildSlots, postfix: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterBuildSlots)));
+                var tableFrame = AccessTools.Method(AccessTools.TypeByName(Slots), "SetPayoutTableFrame");
+                if (tableFrame != null) harmony.Patch(tableFrame, postfix: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterPayoutTableFrame)));
                 if (!Plugin.PointAndSlotsSets.Value || AccessTools.TypeByName(CustomTrades.StudioHook) == null) return; // No TCG Studio sets to add.
                 _catalog = catalog;
 
@@ -102,6 +104,85 @@ namespace TCGCardTracker
             {
                 Plugin.LogOnce("pas:slot-scale", "Could not fit Point And Slots' slot machine to the screen: " + e.Message);
             }
+            try
+            {
+                BuildPayoutLabels(__instance);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pas:payout-table", "Could not relabel Point And Slots' payout table: " + e.Message);
+            }
+        }
+
+        // The payout table is a picture (600x560, 19 slide-in frames) naming Pokémon rarities. When it is fully open,
+        // a panel in its background grey covers the rarity column and lists what CombinationRewards really pays.
+        private const float TableW = 600f, TableH = 560f;
+        private static readonly float[] TableRowY = { 44, 86, 125, 163, 200, 237, 270, 306, 340, 377, 416, 457, 496 };
+        private static GameObject? _payoutLabels;
+        private static int _payoutFrames;
+
+        private static void BuildPayoutLabels(object slots)
+        {
+            var screen = Traverse.Create(slots);
+            var image = screen.Field("_payoutTableImage").GetValue<UnityEngine.UI.Image>();
+            _payoutFrames = (screen.Field("_payoutTableSprites").GetValue() as IDictionary)?.Count ?? 0;
+            var config = AccessTools.Field(AccessTools.TypeByName(PluginType), "Config")?.GetValue(null);
+            if (image == null || _payoutFrames == 0 || config == null) return;
+            var cfg = Traverse.Create(config);
+            var rows = SlotPayouts.Rows(cfg.Property("SlotCombinationRewards").GetValue<string>(), cfg.Property("SlotLossWeight").GetValue<int>());
+
+            // A container the size of the picture, so every child is placed in the picture's own pixels.
+            var panel = new GameObject("TrackerPayoutLabels", typeof(RectTransform));
+            panel.transform.SetParent(image.transform, false);
+            Place(panel.GetComponent<RectTransform>(), 0f, 0f, TableW, TableH);
+            // Grey patches over the old text; the right strip stops short of the arrow (x 535-590, y 253-306).
+            Cover(panel, 245f, 22f, 532f, 538f);
+            Cover(panel, 531f, 22f, 558f, 245f);
+            Cover(panel, 531f, 315f, 558f, 538f);
+            var font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+            for (int i = 0; i < rows.Count && i < TableRowY.Length; i++)
+            {
+                var go = new GameObject("Row" + i, typeof(RectTransform));
+                go.transform.SetParent(panel.transform, false);
+                Place(go.GetComponent<RectTransform>(), 250f, TableRowY[i] - 17f, 530f, TableRowY[i] + 17f);
+                var text = go.AddComponent<UnityEngine.UI.Text>();
+                text.font = font;
+                text.text = rows[i].Label;
+                text.fontStyle = FontStyle.Bold;
+                text.color = new Color32(48, 48, 48, 255);
+                text.alignment = TextAnchor.MiddleLeft;
+                text.resizeTextForBestFit = true;
+                text.resizeTextMinSize = 6;
+                text.resizeTextMaxSize = 40;
+                text.raycastTarget = false;
+            }
+            _payoutLabels = panel;
+            panel.SetActive(false);
+            Plugin.Log.LogInfo("Point And Slots payout table: " + string.Join(", ", rows.Select(r => $"{r.Pattern} {r.Label}")));
+        }
+
+        private static void Cover(GameObject panel, float x0, float y0, float x1, float y1)
+        {
+            var cover = new GameObject("Cover", typeof(RectTransform));
+            cover.transform.SetParent(panel.transform, false);
+            Place(cover.GetComponent<RectTransform>(), x0, y0, x1, y1);
+            var bg = cover.AddComponent<UnityEngine.UI.Image>();
+            bg.color = new Color32(183, 183, 183, 255);
+            bg.raycastTarget = false;
+        }
+
+        /// <summary>Anchors a rect to an area of the payout picture, in its pixels from the top left.</summary>
+        private static void Place(RectTransform rect, float x0, float y0, float x1, float y1)
+        {
+            rect.anchorMin = new Vector2(x0 / TableW, 1f - y1 / TableH);
+            rect.anchorMax = new Vector2(x1 / TableW, 1f - y0 / TableH);
+            rect.offsetMin = rect.offsetMax = Vector2.zero;
+        }
+
+        /// <summary>Postfix on PromoSlotScreen.SetPayoutTableFrame: the new labels only show once the table is fully open.</summary>
+        private static void AfterPayoutTableFrame(int frame)
+        {
+            if (_payoutLabels != null) _payoutLabels.SetActive(frame >= _payoutFrames);
         }
 
         // Point And Slots gives PointsPerPackOpened from a postfix on the CEventPlayer_OnOpenCardPack constructor, an
