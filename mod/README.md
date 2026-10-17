@@ -51,6 +51,9 @@ Press **F7** in your shop to open it.
   game autosaves to another slot it swaps in that slot's old balance, losing what you earned since loading. The
   tracker keeps your current balance and saves it with the slot being saved. Turn it off with
   `[Point And Slots] KeepPointsOnSave`.
+- **Point And Slots points for packs:** Point And Slots' points per opened pack depend on a game event that
+  not every opening sends, so the tracker counts each pack it sees opened and adds the points it missed (never
+  twice). Turn it off with `[Point And Slots] PackPoints`.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
@@ -70,7 +73,7 @@ Press **F7** in your shop to open it.
 
 Settings are in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), which places are counted, and
+(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), which places are counted, and
 `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.

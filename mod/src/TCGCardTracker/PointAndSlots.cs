@@ -48,6 +48,7 @@ namespace TCGCardTracker
                 InstallArtExpander(harmony);
                 InstallAwards(harmony);
                 if (Plugin.PointAndSlotsKeepPoints.Value) InstallKeepPoints(harmony);
+                if (Plugin.PointAndSlotsPackPoints.Value) InstallPackPoints(harmony);
                 if (!Plugin.PointAndSlotsSets.Value || AccessTools.TypeByName(CustomTrades.StudioHook) == null) return; // No TCG Studio sets to add.
                 _catalog = catalog;
 
@@ -66,6 +67,79 @@ namespace TCGCardTracker
             catch (Exception e)
             {
                 Plugin.Log.LogWarning("Could not hook Point And Slots; TCG Studio sets stay out of it: " + e.Message);
+            }
+        }
+
+        // Point And Slots gives PointsPerPackOpened from a postfix on the CEventPlayer_OnOpenCardPack constructor, an
+        // event the game doesn't send for every opening (Eric's log: packs opened, no points). Each pack roll
+        // (CardOpeningSequence.GetPackContent, not its secondary roll) is counted here, each event Point And Slots
+        // did see is counted too, and once both settle the difference is paid through its own AddPoints.
+        private const float PackSettleSeconds = 3f;
+        private static int _unpaidPacks, _paidPacks;
+        private static float _lastRollAt;
+        private static MethodInfo? _addPoints;
+        private static Func<int>? _pointsPerPack;
+        private static Func<object?> _pointsManager = () => null;
+
+        private static void InstallPackPoints(Harmony harmony)
+        {
+            try
+            {
+                var plugin = AccessTools.TypeByName(PluginType);
+                _addPoints = AccessTools.Method(AccessTools.TypeByName("PromoRewardsMod.Core.PromoPointsManager"), "AddPoints", new[] { typeof(int), typeof(string) });
+                var perPack = AccessTools.Property(AccessTools.TypeByName("PromoRewardsMod.Core.PromoConfig"), "PointsPerPackOpened");
+                var configField = plugin == null ? null : AccessTools.Field(plugin, "Config");
+                var pointsField = plugin == null ? null : AccessTools.Field(plugin, "Points");
+                var roll = AccessTools.Method(typeof(CardOpeningSequence), "GetPackContent");
+                var opened = AccessTools.Constructor(typeof(CEventPlayer_OnOpenCardPack), new[] { typeof(int), typeof(int) });
+                if (_addPoints == null || perPack == null || configField == null || pointsField == null || roll == null || opened == null)
+                {
+                    Plugin.Log.LogWarning("Point And Slots changed: could not add its points for opened packs.");
+                    return;
+                }
+                _pointsPerPack = () => (int)perPack.GetValue(configField.GetValue(null));
+                harmony.Patch(roll, postfix: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterPackRoll)));
+                harmony.Patch(opened, postfix: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterPackEvent)));
+                _pointsManager = () => pointsField.GetValue(null);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Could not add Point And Slots points for opened packs: " + e.Message);
+            }
+        }
+
+        private static void AfterPackRoll(bool isSecondaryRolledData)
+        {
+            if (isSecondaryRolledData) return;
+            _unpaidPacks++;
+            _lastRollAt = Time.realtimeSinceStartup;
+        }
+
+        private static void AfterPackEvent(int amount)
+        {
+            if (amount <= 0) return;
+            _paidPacks += amount; // Before or after the roll, whichever the game does first.
+            _lastRollAt = Time.realtimeSinceStartup;
+        }
+
+        /// <summary>Called every frame: pays the packs Point And Slots didn't count, once the rolls have settled.</summary>
+        internal static void Tick()
+        {
+            if ((_unpaidPacks <= 0 && _paidPacks <= 0) || Time.realtimeSinceStartup - _lastRollAt < PackSettleSeconds) return;
+            int packs = _unpaidPacks - _paidPacks;
+            _unpaidPacks = _paidPacks = 0;
+            if (packs <= 0) return;
+            try
+            {
+                int points = packs * _pointsPerPack!();
+                var manager = _pointsManager();
+                if (points <= 0 || manager == null) return;
+                _addPoints!.Invoke(manager, new object[] { points, $"PackOpened(x{packs}, tracker)" });
+                Plugin.Log.LogInfo($"Point And Slots: +{points} points for {packs} opened pack(s).");
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pas:pack-points", "Could not add Point And Slots points for opened packs: " + e.Message);
             }
         }
 

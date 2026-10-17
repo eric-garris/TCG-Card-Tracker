@@ -35,6 +35,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<string> PointAndSlotsAdded = null!;
         internal static ConfigEntry<bool> PointAndSlotsVariants = null!;
         internal static ConfigEntry<bool> PointAndSlotsKeepPoints = null!;
+        internal static ConfigEntry<bool> PointAndSlotsPackPoints = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -95,6 +96,10 @@ namespace TCGCardTracker
                 "With the Point And Slots mod installed: when the game saves to another slot than the one you loaded (such as " +
                 "the autosave), keep your current points balance and save it with that slot. Point And Slots on its own swaps in " +
                 "that slot's old balance, losing the points earned since loading.");
+            PointAndSlotsPackPoints = Config.Bind("Point And Slots", "PackPoints", true,
+                "With the Point And Slots mod installed: give its PointsPerPackOpened for each pack you open. Point And Slots " +
+                "waits for a game event that some pack openings never send (no points at all); packs it does count are not " +
+                "counted twice.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
 
@@ -194,6 +199,7 @@ namespace TCGCardTracker
             {
                 PackWatcher.Tick();
                 TradeBanner.Tick();
+                PointAndSlots.Tick();
             }
             catch (System.Exception e)
             {
