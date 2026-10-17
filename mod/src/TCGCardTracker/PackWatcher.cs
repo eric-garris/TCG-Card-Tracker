@@ -208,6 +208,18 @@ namespace TCGCardTracker
             _until = Time.realtimeSinceStartup + _duration;
         }
 
+        /// <summary>Shows a title and ready-made lines (e.g. what a Point And Slots reward gave).</summary>
+        public void ShowLines(string title, List<string> lines)
+        {
+            _lines.Clear();
+            _title = title;
+            for (int i = 0; i < lines.Count && i < MaxLines; i++)
+                _lines.Add(lines[i]);
+            if (lines.Count > MaxLines) _lines.Add("and more (F7 to see your collection)");
+            _duration = Mathf.Clamp(Plugin.PopupSeconds.Value, 2f, 120f) + Math.Min(lines.Count, MaxLines) / 2;
+            _until = Time.realtimeSinceStartup + _duration;
+        }
+
         private static string Line(Gain g)
         {
             string text = $"{g.Card.Label}  ({g.Card.Set.Name})";

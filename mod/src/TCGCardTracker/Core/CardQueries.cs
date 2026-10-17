@@ -56,6 +56,19 @@ namespace TCGCardTracker.Core
             return lines;
         }
 
+        /// <summary>
+        /// The reward popup's two lines for a card just received: its name and set (marked NEW when no copy was owned
+        /// before), then the copies owned now, which include the ones just received.
+        /// </summary>
+        public static List<string> RewardLines(string label, string set, Holding now, int received, bool isNew)
+        {
+            string first = $"{label}  ({set})" + (received > 1 ? $"  x{received}" : "") + (isNew ? "  NEW" : "");
+            var owned = now.Lines();
+            if (owned.Count > 0 && owned[0].StartsWith("You own ", StringComparison.Ordinal))
+                owned[0] = "You now own " + owned[0].Substring("You own ".Length);
+            return new List<string> { first, "    " + string.Join("  ·  ", owned) };
+        }
+
         private string Grade(int col) => new Column(col).LongLabel + (ByCol[col] > 1 ? $" x{ByCol[col]}" : "");
     }
 

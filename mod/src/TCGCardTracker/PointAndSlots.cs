@@ -225,7 +225,10 @@ namespace TCGCardTracker
                     if (target != null) harmony.Patch(target, prefix: before, finalizer: after);
                 if (shop == null || slots == null)
                     Plugin.Log.LogWarning("Point And Slots changed: random card versions and the new-card popup may miss some of its rewards.");
-                if (addCard != null) harmony.Patch(addCard, prefix: new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeAddCard)) { priority = Priority.First });
+                if (addCard != null) harmony.Patch(addCard, prefix: new HarmonyMethod(typeof(PointAndSlots), nameof(BeforeAddCard)) { priority = Priority.First },
+                    postfix: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterAddCard)));
+                if (shop != null) _rewardTitles[shop] = "Bought in the point shop";
+                if (slots != null) _rewardTitles[slots] = "Won on the slots";
                 _studioVersions = StudioVersions();
             }
             catch (Exception e)
@@ -234,10 +237,16 @@ namespace TCGCardTracker
             }
         }
 
-        private static void BeforeAward()
+        private static readonly Dictionary<MethodBase, string> _rewardTitles = new Dictionary<MethodBase, string>();
+        private static readonly List<(CardData card, int amount)> _received = new List<(CardData, int)>();
+        private static string _rewardTitle = "";
+
+        private static void BeforeAward(MethodBase __originalMethod)
         {
             _awarding = true;
             _beforeAward = null;
+            _received.Clear();
+            _rewardTitle = __originalMethod != null && _rewardTitles.TryGetValue(__originalMethod, out var t) ? t : "Point And Slots reward";
             try
             {
                 if (Plugin.NewCardPopup.Value && GameReader.IsReady()) _beforeAward = PackWatcher.Snapshot(out _);
@@ -254,7 +263,45 @@ namespace TCGCardTracker
             _awarding = false;
             var before = _beforeAward;
             _beforeAward = null;
-            if (before != null) PackWatcher.ShowGainsSince(before, "Point And Slots reward");
+            if (before != null && _received.Count > 0) ShowReward(before);
+            _received.Clear();
+        }
+
+        /// <summary>Postfix on CPlayerData.AddCard during an award: notes the card as actually added (version rolled).</summary>
+        private static void AfterAddCard(CardData cardData, int addAmount)
+        {
+            if (_awarding && cardData != null && addAmount > 0) _received.Add((Copy(cardData), addAmount));
+        }
+
+        /// <summary>The reward popup: every card received, its version, and how many copies are owned now.</summary>
+        private static void ShowReward(int[] before)
+        {
+            try
+            {
+                var now = PackWatcher.Snapshot(out var catalog);
+                var lines = new List<string>();
+                var counts = new Dictionary<Card, int>();
+                var order = new List<Card>();
+                foreach (var (data, amount) in _received)
+                {
+                    var card = catalog.FromPhysical((int)data.expansionType, (int)data.monsterType, (int)data.borderType, data.isFoil, data.isDestiny);
+                    if (card == null) continue;
+                    if (!counts.ContainsKey(card)) { counts[card] = 0; order.Add(card); }
+                    counts[card] += amount;
+                }
+                foreach (var card in order)
+                {
+                    bool isNew = CardQueries.HoldingOf(before, card).Copies == 0;
+                    lines.AddRange(Holding.RewardLines(card.Label, card.Set.Name, CardQueries.HoldingOf(now, card), counts[card], isNew));
+                }
+                if (lines.Count == 0) return;
+                Plugin.Log.LogInfo($"{_rewardTitle}: {string.Join(" | ", lines)}");
+                PackWatcher.Toast.ShowLines(_rewardTitle, lines);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pas:reward-popup", "Could not show the Point And Slots reward popup: " + e.Message);
+            }
         }
 
         /// <summary>

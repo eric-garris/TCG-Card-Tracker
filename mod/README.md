@@ -45,8 +45,9 @@ Press **F7** in your shop to open it.
   machine show its art for base-game cards too.
 - **Point And Slots rewards:** a card bought in its point shop or won on its slot machine comes as a random
   version (border and foil) with the same odds as a pack, though the shop still shows the base card; a TCG
-  Studio set only gives the versions it has. Turn it off with `[Point And Slots] RandomVersions`. The
-  "new for your collection" popup also shows after these rewards.
+  Studio set only gives the versions it has. Turn it off with `[Point And Slots] RandomVersions`. After
+  every purchase or win a popup lists each card you got, its version, and how many copies you now own
+  (counting the new ones).
 - **Point And Slots points across saves:** Point And Slots keeps a points balance per save slot, and when the
   game autosaves to another slot it swaps in that slot's old balance, losing what you earned since loading. The
   tracker keeps your current balance and saves it with the slot being saved. Turn it off with

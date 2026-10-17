@@ -64,7 +64,8 @@ namespace TCGCardTracker
             LiveShelves = Config.Bind("General", "LiveShelves", true,
                 "Re-read display shelves, storage and boxes from the shop when the tracker opens or refreshes. Turn off to use the last save instead.");
             NewCardPopup = Config.Bind("General", "NewCardPopup", true,
-                "After you open packs or get a Point And Slots reward, briefly list the cards that are new to your collection (or now owned at a better grade). " +
+                "After you open packs, briefly list the cards that are new to your collection (or now owned at a better grade); after a " +
+                "Point And Slots reward, list every card you got with its version and how many copies you now own. " +
                 "This hooks the game's pack opening; when it is off at startup, the hook is not installed at all.");
             PopupSeconds = Config.Bind("General", "PopupSeconds", 12f,
                 "How long the new-card popup stays on screen, in seconds (2 - 120). Each extra card listed adds a second.");
