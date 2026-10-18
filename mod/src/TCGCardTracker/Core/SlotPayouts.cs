@@ -41,9 +41,19 @@ namespace TCGCardTracker.Core
             return Order.Select(p => new Row
             {
                 Pattern = p,
-                Rarities = names.TryGetValue(p, out var n) ? string.Join(" / ", n) : "",
+                Rarities = names.TryGetValue(p, out var n) ? Join(n) : "",
                 Percent = all > 0m && totals.TryGetValue(p, out var w) ? (double)(w * 100m / all) : 0,
             }).ToList();
+        }
+
+        /// <summary>"Common / Rare", or "Common / Rare - Silver" when every one names the same version.</summary>
+        private static string Join(List<string> rarities)
+        {
+            const string sep = " - ";
+            var versions = rarities.Select(r => SlotVersion.TryParse(r, out _, out _, out _) ? r.Substring(r.LastIndexOf(sep, StringComparison.Ordinal) + sep.Length).Trim() : null).ToList();
+            if (rarities.Count > 1 && versions[0] != null && versions.All(v => string.Equals(v, versions[0], StringComparison.OrdinalIgnoreCase)))
+                return string.Join(" / ", rarities.Select(SlotVersion.RarityOf)) + sep + versions[0];
+            return string.Join(" / ", rarities);
         }
 
         /// <summary>"12%", "3.5%", "0.25%": no more decimals than it needs, at most two.</summary>

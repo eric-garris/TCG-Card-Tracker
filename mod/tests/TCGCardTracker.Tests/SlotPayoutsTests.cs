@@ -21,5 +21,13 @@ namespace TCGCardTracker.Tests
             var rows = SlotPayouts.Rows("pika|30|Ultra Rare;PIKA|30|Rare PRIME", 940);
             Assert.Equal("Ultra Rare / Rare PRIME  6%", rows[3].Label);
         }
+
+        [Fact]
+        public void SharedVersionIsNamedOnce()
+        {
+            var rows = SlotPayouts.Rows("R|75|Common - Full Art;R|75|Rare - Full Art;che1|50|Common - Base;che1|50|Rare - Silver", 9750);
+            Assert.Equal("Common / Rare - Full Art  1.5%", rows[2].Label);
+            Assert.Equal("Common - Base / Rare - Silver  1%", rows[12].Label);
+        }
     }
 }
