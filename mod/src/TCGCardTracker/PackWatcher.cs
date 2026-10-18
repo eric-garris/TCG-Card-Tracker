@@ -143,6 +143,23 @@ namespace TCGCardTracker
             }
         }
 
+        /// <summary>Shows the toast for what was added since <paramref name="before"/> (a Snapshot), e.g. a mod's card reward.</summary>
+        internal static void ShowGainsSince(int[] before, string what)
+        {
+            try
+            {
+                if (_catalog == null || !GameReader.IsReady()) return;
+                var gains = CardQueries.Gains(_catalog, before, Owned(_catalog));
+                if (gains.Count == 0) return;
+                Plugin.Log.LogInfo($"{what}: {gains.Count} new for your collection.");
+                if (Plugin.NewCardPopup.Value) Toast.Show(gains);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("gains:" + what, $"New-card popup could not compare the collection after a {what}: " + e.Message);
+            }
+        }
+
         private static int[] Owned(Catalog catalog) => GameReader.Read(catalog).Combine(Plugin.IncludedLocations());
 
         /// <summary>Kept separate so a game version without IsActive fails here, not in Tick.</summary>
@@ -170,6 +187,7 @@ namespace TCGCardTracker
         private string _title = "";
         private float _until = -1f;
         private float _duration;
+        private bool _left;
         private GUIStyle? _box, _titleStyle, _lineStyle;
 
         public void Clear() => _until = -1f;
@@ -178,6 +196,7 @@ namespace TCGCardTracker
         public void Show(List<Gain> gains)
         {
             _lines.Clear();
+            _left = false;
             int news = 0;
             foreach (var g in gains)
                 if (g.IsNew) news++;
@@ -188,6 +207,22 @@ namespace TCGCardTracker
                 _lines.Add(Line(gains[i]));
             if (gains.Count > MaxLines) _lines.Add($"and {gains.Count - MaxLines} more (F7 to see your collection)");
             _duration = Mathf.Clamp(Plugin.PopupSeconds.Value, 2f, 120f) + Math.Min(gains.Count, MaxLines) - 1;
+            _until = Time.realtimeSinceStartup + _duration;
+        }
+
+        /// <summary>
+        /// Shows a title and ready-made lines (e.g. what a Point And Slots reward gave); <paramref name="left"/> puts it
+        /// at the left edge, clear of a card shown in the middle of the screen.
+        /// </summary>
+        public void ShowLines(string title, List<string> lines, bool left = false)
+        {
+            _lines.Clear();
+            _left = left;
+            _title = title;
+            for (int i = 0; i < lines.Count && i < MaxLines; i++)
+                _lines.Add(lines[i]);
+            if (lines.Count > MaxLines) _lines.Add("and more (F7 to see your collection)");
+            _duration = Mathf.Clamp(Plugin.PopupSeconds.Value, 2f, 120f) + Math.Min(lines.Count, MaxLines) / 2;
             _until = Time.realtimeSinceStartup + _duration;
         }
 
@@ -226,7 +261,8 @@ namespace TCGCardTracker
                 const float pad = 22f, lineH = 30f, titleH = 40f;
                 w = Mathf.Min(w + pad * 2f, sw - 40f);
                 float h = pad + titleH + lineH * _lines.Count + pad;
-                var r = new Rect((sw - w) / 2f, sh * 0.1f, w, h);
+                w = _left ? Mathf.Min(w, sw * 0.35f) : w;
+                var r = _left ? new Rect(20f, (sh - h) / 2f, w, h) : new Rect((sw - w) / 2f, sh * 0.1f, w, h);
 
                 GUI.Box(r, GUIContent.none, _box);
                 GUI.Label(new Rect(r.x + pad, r.y + pad, w - pad * 2f, titleH), _title, _titleStyle);

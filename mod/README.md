@@ -32,12 +32,45 @@ Press **F7** in your shop to open it.
   trade or sell when the vanilla sets are hidden. With TCG Studio installed, this mod gives each
   trading or selling customer a `CustomTradeChance` (25% by default) of bringing a card from one of
   your custom sets instead, while the vanilla sets stay on. Set it to 0 to turn this off.
+- **TCG Studio sets in Point And Slots:** with TCG Studio and the
+  [Point And Slots](https://www.nexusmods.com/tcgcardshopsimulator/mods/1649) mod installed, your
+  custom sets show up in its point shop and slot machine, under a "TCG Studio" group with their real
+  set and rarity names. A set counts as unlocked once you own one of its pack licenses. New sets are
+  picked up automatically. Rarity names Point And Slots doesn't list yet are added once to its
+  `PromoRarities` and `ShopEligibleRarities` settings, with a `ShopCostByRarity` price by how rare
+  they are in their set; delete one there and it stays deleted. If Enhanced Prefab Loader isn't
+  loaded, Point And Slots normally shows no sets at all; this also gives it the base-game sets.
+  Turn it off with `[Point And Slots] CustomSets`, or just the rarity names with `AddRarities`.
+  With the Art Expander mod installed, the shop and slot
+  machine show its art for base-game cards too.
+- **Point And Slots rewards:** a card bought in its point shop or won on its slot machine comes as a random
+  version (border and foil) with the same odds as a pack, though the shop still shows the base card; a TCG
+  Studio set only gives the versions it has. Turn it off with `[Point And Slots] RandomVersions`. After
+  every purchase or win a popup lists each card you got, its version and market value, and how many copies you now own
+  (counting the new ones).
+- **Point And Slots points across saves:** Point And Slots keeps a points balance per save slot, and when the
+  game autosaves to another slot it swaps in that slot's old balance, losing what you earned since loading. The
+  tracker keeps your current balance and saves it with the slot being saved. Turn it off with
+  `[Point And Slots] KeepPointsOnSave`.
+- **Point And Slots points for packs:** Point And Slots' points per opened pack depend on a game event that
+  not every opening sends, so the tracker counts each pack it sees opened and adds the points it missed (never
+  twice). Turn it off with `[Point And Slots] PackPoints`.
+- **Point And Slots payout table:** the slot machine's payout table is a picture, so once it is fully open the
+  tracker writes over each row the rarities that combination pays and its chance per spin, worked out from your
+  `CombinationRewards` and `LossWeight` settings. Edit those and the table follows.
+- **Point And Slots rewards with a version:** a slot reward rarity in `CombinationRewards` can name the exact
+  version it pays, as `Rarity - Version`: for example `che2|800|Common - First Edition` or
+  `7gold|50|Legendary - Full Art Foil`. The versions are Base, First Edition, Silver, Gold, EX and Full Art, each
+  optionally followed by Foil (`Common - Foil` is a Base foil). Such a reward gives that version rather than a random
+  one; if a TCG Studio set doesn't have it, you get the closest version it has. The slot win screen names the
+  version won.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
   that hook isn't installed. The
   one thing it changes is which set a trading customer's card comes from, and only with TCG Studio
-  installed and `CustomTradeChance` above 0.
+  installed and `CustomTradeChance` above 0. With Point And Slots installed, it also adds your
+  custom sets to that mod's card list and, once per new rarity name, to its rarity settings.
 
 ## Install
 
@@ -50,7 +83,7 @@ Press **F7** in your shop to open it.
 
 Settings are in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`), which places are counted, and
+(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), which places are counted, and
 `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.
