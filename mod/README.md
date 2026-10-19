@@ -77,11 +77,15 @@ Press **F7** in your shop to open it.
 1. Install **BepInEx 5** for the game. The easiest way is r2modman or the Thunderstore Mod Manager
    (choose "TCG Card Shop Simulator"). To do it by hand, extract BepInEx 5.4.23.5 (Windows x64) into
    the game folder, next to `Card Shop Simulator.exe`, and start the game once.
-2. Put `TCGCardTracker.dll` in `<game>\BepInEx\plugins\TCGCardTracker\`. With a mod manager, import
+2. Download the zip from the latest `mod-v...` release on the
+   [Releases page](https://github.com/eric-garris/TCG-Card-Tracker/releases).
+   Put `TCGCardTracker.dll` in `<game>\BepInEx\plugins\TCGCardTracker\`. With a mod manager, import
    the release zip instead.
 3. Start the game, load your shop, and press **F7**.
 
-Settings are in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
+Most settings can be changed in game on the tracker's **Settings** tab (press F7, then Settings).
+Hover a setting to see what it does; changes are saved straight away. A setting that shows `*` after you change it needs a
+game restart. They are all also in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
 (`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), which places are counted, and
 `LiveShelves` there.

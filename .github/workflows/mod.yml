@@ -4,7 +4,7 @@ on:
   pull_request:
     paths: ['mod/**', '.github/workflows/mod.yml']
   push:
-    branches: [main]
+    branches: [main, claude/tcg-card-tracker-tool-791csl]
     paths: ['mod/**', '.github/workflows/mod.yml']
     tags: ['mod-v*']
   workflow_dispatch:
