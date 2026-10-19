@@ -41,7 +41,7 @@ are stored differently and are not supported.
 
 ## Hosting
 
-Pushing to `main` builds the app and publishes it to GitHub Pages
+Pushing to the default branch (or `main`) builds the app and publishes it to GitHub Pages
 (`.github/workflows/pages.yml`). Turn it on once under **Settings → Pages → Build and
 deployment → Source: GitHub Actions**. The site is then at
 `https://<user>.github.io/TCG-Card-Tracker/`.

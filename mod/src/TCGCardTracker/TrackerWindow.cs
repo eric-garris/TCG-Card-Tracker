@@ -10,9 +10,9 @@ namespace TCGCardTracker
     /// The in-game panel (IMGUI). Overview: sets x (Ungraded, Grade 1-10, Any grade, Any form),
     /// each cell "owned / total" plus copies, expandable to edition and foil. Clicking a cell
     /// opens the card list for it (missing or owned), with a picture of each card: hover one to
-    /// enlarge it, click to pin it in its own window.
+    /// enlarge it, click to pin it in its own window. Settings: every cfg option, changed in game.
     /// </summary>
-    internal sealed class TrackerWindow
+    internal sealed partial class TrackerWindow
     {
         private const int WindowId = 0x54434754; // "TCGT"
         private const int PinnedWindowId = WindowId + 1;
@@ -123,6 +123,7 @@ namespace TCGCardTracker
         private void Close()
         {
             _open = false;
+            _rebinding = false;
             _hover = _hoverNext = _pinned = null;
             // If the game was paused while the panel was open, hand the cursor back only once it
             // resumes (the pause menu still needs it, and the game's UI-mode reset waits on game time).
@@ -135,6 +136,7 @@ namespace TCGCardTracker
         public void ForceClose()
         {
             _open = false;
+            _rebinding = false;
             _uiController = null;
             _catalog = null;
             _collection = null;
@@ -146,6 +148,9 @@ namespace TCGCardTracker
         }
 
         /// <summary>Called every frame: keeps binder counts current and card pictures drawn while the panel is open.</summary>
+        /// <summary>Waiting for a new open/close key: the old one must not close the window meanwhile.</summary>
+        public bool Rebinding => _rebinding;
+
         public void Tick()
         {
             if (!_open)
@@ -442,6 +447,8 @@ namespace TCGCardTracker
             GUILayout.BeginHorizontal();
             if (GUILayout.Toggle(_tab == 0, "Overview", Styles.Tab, GUILayout.Width(110))) _tab = 0;
             if (GUILayout.Toggle(_tab == 1, "Card list", Styles.Tab, GUILayout.Width(110))) _tab = 1;
+            if (GUILayout.Toggle(_tab == 2, "Settings", Styles.Tab, GUILayout.Width(110))) _tab = 2;
+            if (_tab != 2) _rebinding = false;
             GUILayout.FlexibleSpace();
             if (_collection != null)
             {
@@ -451,6 +458,14 @@ namespace TCGCardTracker
             if (GUILayout.Button("Refresh", GUILayout.Width(80))) Refresh(full: true);
             if (GUILayout.Button("Close", GUILayout.Width(70))) Close();
             GUILayout.EndHorizontal();
+
+            // Settings work without a loaded shop, e.g. from the title screen.
+            if (_tab == 2)
+            {
+                DrawSettings();
+                GUI.DragWindow(new Rect(0, 0, 10000, 22));
+                return;
+            }
 
             if (_catalog == null || _collection == null)
             {
