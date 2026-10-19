@@ -32,6 +32,9 @@ Press **F7** in your shop to open it.
   trade or sell when the vanilla sets are hidden. With TCG Studio installed, this mod gives each
   trading or selling customer a `CustomTradeChance` (25% by default) of bringing a card from one of
   your custom sets instead, while the vanilla sets stay on. Set it to 0 to turn this off.
+  In a trade, the card the customer asks for in return also has a `CustomRequestChance` (25% by
+  default) of being one of your custom-set cards, picked from cards you own at a fair price for
+  what they offer (75% to 150% of it, as the game does). With none, they ask for a vanilla card.
 - **TCG Studio sets in Point And Slots:** with TCG Studio and the
   [Point And Slots](https://www.nexusmods.com/tcgcardshopsimulator/mods/1649) mod installed, your
   custom sets show up in its point shop and slot machine, under a "TCG Studio" group with their real
@@ -68,8 +71,8 @@ Press **F7** in your shop to open it.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
   that hook isn't installed. The
-  one thing it changes is which set a trading customer's card comes from, and only with TCG Studio
-  installed and `CustomTradeChance` above 0. With Point And Slots installed, it also adds your
+  one thing it changes is which set a trading customer's card, and the card they ask for, comes
+  from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
   custom sets to that mod's card list and, once per new rarity name, to its rarity settings.
 
 ## Install
@@ -87,7 +90,7 @@ Most settings can be changed in game on the tracker's **Settings** tab (press F7
 Hover a setting to see what it does; changes are saved straight away. A setting that shows `*` after you change it needs a
 game restart. They are all also in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), which places are counted, and
+(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), which places are counted, and
 `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.

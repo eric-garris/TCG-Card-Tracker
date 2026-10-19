@@ -17,7 +17,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.9.0";
+        public const string Version = "0.10.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -30,6 +30,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<float> PopupSeconds = null!;
         internal static ConfigEntry<float> PopupScale = null!;
         internal static ConfigEntry<float> CustomTradeChance = null!;
+        internal static ConfigEntry<float> CustomRequestChance = null!;
         internal static ConfigEntry<bool> PointAndSlotsSets = null!;
         internal static ConfigEntry<bool> PointAndSlotsRarities = null!;
         internal static ConfigEntry<string> PointAndSlotsAdded = null!;
@@ -79,6 +80,10 @@ namespace TCGCardTracker
                 "With TCG Studio installed: the chance (0 - 1) that a customer who comes to trade or sell brings a card from one of " +
                 "its custom sets instead of a vanilla one. 0 leaves trades as TCG Studio makes them. " +
                 "This hooks TCG Studio's trade code, and only when TCG Studio is installed.");
+            CustomRequestChance = Config.Bind("Trades", "CustomRequestChance", 0.25f,
+                "With TCG Studio installed: the chance (0 - 1) that a customer who comes to trade asks for one of your cards from " +
+                "its custom sets instead of a vanilla one. They only ask for a card you own, at a fair price for what they offer " +
+                "(75% - 150% of it, as the game does); with none, they ask for a vanilla card as usual. 0 leaves this to the game.");
             PointAndSlotsSets = Config.Bind("Point And Slots", "CustomSets", true,
                 "With TCG Studio and the Point And Slots mod installed: put TCG Studio's sets in Point And Slots' point shop and " +
                 "slot machine (a set counts as unlocked once you own one of its pack licenses), with their real set and rarity names. " +

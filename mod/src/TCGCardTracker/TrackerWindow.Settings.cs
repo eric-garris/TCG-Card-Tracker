@@ -68,6 +68,7 @@ namespace TCGCardTracker
                 {
                     new Setting(Plugin.TradeBanners, "Trade banners", startup: true),
                     new Setting(Plugin.CustomTradeChance, "TCG Studio trade chance", min: 0f, max: 1f, step: 0.05f),
+                    new Setting(Plugin.CustomRequestChance, "TCG Studio ask chance", min: 0f, max: 1f, step: 0.05f),
                 }),
                 ("Point And Slots", new[]
                 {
