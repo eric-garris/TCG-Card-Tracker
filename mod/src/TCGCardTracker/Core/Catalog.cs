@@ -46,6 +46,8 @@ namespace TCGCardTracker.Core
         public int Num;
         public string Name = "";
         public Tier Tier;
+        /// <summary>The game's name for the card's rarity, such as "Common", or a TCG Studio set's own rarity name.</summary>
+        public string RarityName = "";
         public int Edition;
         public string EditionName = "";
         public bool Foil;
@@ -60,6 +62,9 @@ namespace TCGCardTracker.Core
                 return Foil ? $"{Name} · {g} · Foil" : $"{Name} · {g}";
             }
         }
+
+        /// <summary>What the popups and trade banners show: the rarity where <see cref="Label"/> has the edition.</summary>
+        public string RarityLabel => Foil ? $"{Name} · {RarityName} · Foil" : $"{Name} · {RarityName}";
     }
 
     /// <summary>
@@ -75,7 +80,7 @@ namespace TCGCardTracker.Core
         private readonly Dictionary<long, Card> _byIndex = new Dictionary<long, Card>();
         private readonly Dictionary<int, SetDef> _byExpansion = new Dictionary<int, SetDef>();
 
-        public static Catalog Build(IEnumerable<SetDef> sets, Func<int, string> monsterName, Func<int, Tier> monsterTier)
+        public static Catalog Build(IEnumerable<SetDef> sets, Func<int, string> monsterName, Func<int, Tier> monsterTier, Func<int, string?>? rarityName = null)
         {
             var cat = new Catalog();
             foreach (var set in sets)
@@ -89,6 +94,7 @@ namespace TCGCardTracker.Core
                         int monster = set.Shown[pos];
                         string name = monsterName(monster);
                         Tier tier = monsterTier(monster);
+                        string rarity = rarityName?.Invoke(monster) is { Length: > 0 } r ? r : tier.ToString();
                         for (int v = 0; v < set.PerMonster; v++)
                         {
                             int edition = v % set.PerNoFoil;
@@ -103,6 +109,7 @@ namespace TCGCardTracker.Core
                                 Num = pos + 1,
                                 Name = name,
                                 Tier = tier,
+                                RarityName = rarity,
                                 Edition = edition,
                                 EditionName = editionName,
                                 Foil = v >= set.PerNoFoil,

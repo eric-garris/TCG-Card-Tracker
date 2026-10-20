@@ -702,7 +702,7 @@ namespace TCGCardTracker
                 if (pictures) DrawThumbnail(c);
                 GUILayout.Label(c.Num.ToString("000"), Styles.RowMuted, GUILayout.Width(44), height);
                 GUILayout.Label(c.Label, Styles.RowBody, GUILayout.Width(260), height);
-                GUILayout.Label(c.Tier.ToString(), Styles.RowMuted, GUILayout.Width(80), height);
+                GUILayout.Label(c.RarityName, Styles.RowMuted, GUILayout.Width(80), height);
                 GUILayout.Label(OwnedAs(c), Styles.RowBody, GUILayout.Width(220), height);
                 GUILayout.Label(Where(c), Styles.RowBody, GUILayout.Width(200), height);
                 string price = p.HasValue && (p.Value > 0f || !spares) ? GameReader.PriceString(p.Value) : "-";

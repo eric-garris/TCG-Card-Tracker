@@ -98,7 +98,7 @@ namespace TCGCardTracker
             int col = Collection.ColumnOf(data.cardGrade);
             var holding = CardQueries.HoldingOf(owned, card);
             b.Title = title;
-            b.Card = $"{card.Label}  ({card.Set.Name})" + (col > 0 ? $"  {new Column(col).LongLabel}" : "");
+            b.Card = $"{card.RarityLabel}  ({card.Set.Name})" + (col > 0 ? $"  {new Column(col).LongLabel}" : "");
             b.Lines.Clear();
             b.Lines.AddRange(holding.Lines());
             b.OwnsNone = holding.Copies == 0;

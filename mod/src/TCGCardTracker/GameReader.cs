@@ -126,7 +126,7 @@ namespace TCGCardTracker
                 });
             }
             sets.AddRange(CustomSets());
-            return Catalog.Build(sets, MonsterName, MonsterTier);
+            return Catalog.Build(sets, MonsterName, MonsterTier, MonsterRarityName);
         }
 
         private static bool IsCustom(int expansion) => expansion >= CustomExpansionBase;
@@ -289,6 +289,19 @@ namespace TCGCardTracker
                 // Unknown rarity counts as Common.
             }
             return Tier.Common;
+        }
+
+        /// <summary>The game's rarity name for a monster (a TCG Studio set's own names too); null falls back to the tier.</summary>
+        private static string? MonsterRarityName(int id)
+        {
+            try
+            {
+                return InventoryBase.GetMonsterData((EMonsterType)id)?.GetRarityName();
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         /// <summary>

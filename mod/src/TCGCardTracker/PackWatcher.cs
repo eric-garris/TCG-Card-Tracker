@@ -228,7 +228,7 @@ namespace TCGCardTracker
 
         private static string Line(Gain g)
         {
-            string text = $"{g.Card.Label}  ({g.Card.Set.Name})";
+            string text = $"{g.Card.RarityLabel}  ({g.Card.Set.Name})";
             if (!g.IsNew) text += $"  now {new Column(g.BestCol).LongLabel}";
             else if (g.BestCol > 0) text += $"  {new Column(g.BestCol).LongLabel}";
             if (g.Copies > 1) text += $"  x{g.Copies}";
