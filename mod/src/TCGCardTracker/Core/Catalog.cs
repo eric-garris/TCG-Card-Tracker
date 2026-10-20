@@ -63,8 +63,19 @@ namespace TCGCardTracker.Core
             }
         }
 
-        /// <summary>What the popups and trade banners show: the rarity where <see cref="Label"/> has the edition.</summary>
-        public string RarityLabel => Foil ? $"{Name} · {RarityName} · Foil" : $"{Name} · {RarityName}";
+        /// <summary>
+        /// What the popups and trade banners show: rarity, then the edition unless it is the basic one
+        /// (Ghost's White/Black instead), then Foil. "Pigni · Common · Silver · Foil", "Pigni · Common".
+        /// </summary>
+        public string RarityLabel
+        {
+            get
+            {
+                var g = Set.Lists.Length > 1 ? Group : Edition > 0 ? EditionName : "";
+                var label = g.Length > 0 ? $"{Name} · {RarityName} · {g}" : $"{Name} · {RarityName}";
+                return Foil ? label + " · Foil" : label;
+            }
+        }
     }
 
     /// <summary>
