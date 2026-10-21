@@ -28,6 +28,8 @@ Press **F7** in your shop to open it.
   says how many copies you own, ungraded and at each grade (or that you own none), and whether it
   would be new for your collection. In a trade, a second banner above the card they want from you
   does the same. Turn them off with `TradeBanners`; `PopupScale` sets their size too.
+- The popups and trade banners name each card by its rarity, then its edition (left out for
+  Basic), then Foil: "Pigni · Common · Silver · Foil". TCG Studio sets use their own rarity names.
 - **TCG Studio cards in trades:** on its own, TCG Studio only lets customers bring its cards to
   trade or sell when the vanilla sets are hidden. With TCG Studio installed, this mod gives each
   trading or selling customer a `CustomTradeChance` (25% by default) of bringing a card from one of
@@ -49,7 +51,7 @@ Press **F7** in your shop to open it.
 - **Point And Slots rewards:** a card bought in its point shop or won on its slot machine comes as a random
   version (border and foil) with the same odds as a pack, though the shop still shows the base card; a TCG
   Studio set only gives the versions it has. Turn it off with `[Point And Slots] RandomVersions`. After
-  every purchase or win a popup lists each card you got, its version and market value, and how many copies you now own
+  every purchase or win a popup lists each card you got, its rarity, version and market value, and how many copies you now own
   (counting the new ones).
 - **Point And Slots points across saves:** Point And Slots keeps a points balance per save slot, and when the
   game autosaves to another slot it swaps in that slot's old balance, losing what you earned since loading. The

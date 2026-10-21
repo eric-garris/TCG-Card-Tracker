@@ -390,7 +390,7 @@ namespace TCGCardTracker
                 {
                     bool isNew = CardQueries.HoldingOf(before, card).Copies == 0;
                     var price = GameReader.MarketPrice(card, 0); // Rewards come ungraded.
-                    lines.AddRange(Holding.RewardLines(card.Label, card.Set.Name, CardQueries.HoldingOf(now, card), counts[card], isNew,
+                    lines.AddRange(Holding.RewardLines(card.RarityLabel, card.Set.Name, CardQueries.HoldingOf(now, card), counts[card], isNew,
                         price.HasValue && price.Value > 0f ? GameReader.PriceString(price.Value) : null));
                 }
                 if (lines.Count == 0) return;

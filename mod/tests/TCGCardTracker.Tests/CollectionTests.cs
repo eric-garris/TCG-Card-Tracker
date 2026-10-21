@@ -45,6 +45,9 @@ namespace TCGCardTracker.Tests
         {
             Assert.Equal("Pigni · Basic", Cat.FromCompact(0, 0, false)!.Label);
             Assert.Equal("Pigni · Basic · Foil", Cat.FromCompact(0, 6, false)!.Label);
+            Assert.Equal("Pigni · Common · Foil", Cat.FromCompact(0, 6, false)!.RarityLabel);
+            Assert.Equal("Pigni · Common", Cat.FromCompact(0, 0, false)!.RarityLabel);
+            Assert.Equal("Burpig · Common · Gold · Foil", Cat.FromPhysical(0, 2, 3, true, false)!.RarityLabel);
             Assert.Equal(21, Cat.FromPhysical(0, 2, 3, true, false)!.SaveIndex); // Burpig Gold foil
             var k = Cat.FromPhysical(2, 102, 0, true, true)!;
             Assert.Equal((1, 39, "Katengu"), (k.List, k.SaveIndex, k.Name));
