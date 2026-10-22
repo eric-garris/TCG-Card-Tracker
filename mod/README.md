@@ -69,13 +69,19 @@ Press **F7** in your shop to open it.
   optionally followed by Foil (`Common - Foil` is a Base foil). Such a reward gives that version rather than a random
   one; if a TCG Studio set doesn't have it, you get the closest version it has. The slot win screen names the
   version won.
+- **Faster TCG Marketplace sales:** with the TCG Marketplace mod installed, listings sell much faster than its
+  own pace of a customer every 2 - 4 seconds buying 1 - 2 cards. By default a customer comes about every second
+  (`[TCG Marketplace] CustomerSeconds`) and buys up to 10 cards (`CardsPerCustomer`), and each listing is checked
+  for a buyer about every 5 seconds instead of 15 - 25 (`RecheckSeconds`). Prices, sale chances and payments are
+  unchanged. Turn it off with `[TCG Marketplace] FasterSales`.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
   that hook isn't installed. The
   one thing it changes is which set a trading customer's card, and the card they ask for, comes
   from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
-  custom sets to that mod's card list and, once per new rarity name, to its rarity settings.
+  custom sets to that mod's card list and, once per new rarity name, to its rarity settings. With TCG Marketplace
+  installed, it changes how fast that mod's listings sell.
 
 ## Install
 
@@ -92,7 +98,7 @@ Most settings can be changed in game on the tracker's **Settings** tab (press F7
 Hover a setting to see what it does; changes are saved straight away. A setting that shows `*` after you change it needs a
 game restart. They are all also in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), which places are counted, and
+(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), TCG Marketplace sale speed (`FasterSales`, `CustomerSeconds`, `CardsPerCustomer`, `RecheckSeconds`), which places are counted, and
 `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.
