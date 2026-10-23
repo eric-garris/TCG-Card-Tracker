@@ -19,7 +19,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.12.0";
+        public const string Version = "0.13.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -39,6 +39,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> PointAndSlotsVariants = null!;
         internal static ConfigEntry<bool> PointAndSlotsKeepPoints = null!;
         internal static ConfigEntry<bool> PointAndSlotsPackPoints = null!;
+        internal static ConfigEntry<bool> PointAndSlotsBulkAmounts = null!;
         internal static ConfigEntry<bool> MarketFasterSales = null!;
         internal static ConfigEntry<float> MarketCustomerSeconds = null!;
         internal static ConfigEntry<float> MarketCardsPerCustomer = null!;
@@ -112,6 +113,10 @@ namespace TCGCardTracker
                 "With the Point And Slots mod installed: give its PointsPerPackOpened for each pack you open. Point And Slots " +
                 "waits for a game event that some pack openings never send (no points at all); packs it does count are not " +
                 "counted twice.");
+            PointAndSlotsBulkAmounts = Config.Bind("Point And Slots", "BulkAmounts", true,
+                "With the Point And Slots mod installed: in its point shop, hold Shift while clicking - or + to change the " +
+                "amount by 10, or Ctrl for 100. You can also click the amount between the buttons, type a number and press " +
+                "Enter to put exactly that many in the cart (0 takes the card out).");
             MarketFasterSales = Config.Bind("TCG Marketplace", "FasterSales", true,
                 "With the TCG Marketplace mod installed: sell your listings at the pace set below instead of its own " +
                 "(a customer every 2 - 4 seconds buying 1 - 2 cards, each listing checked for a buyer every 15 - 25 seconds). " +

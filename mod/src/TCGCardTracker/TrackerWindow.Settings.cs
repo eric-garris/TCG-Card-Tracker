@@ -77,6 +77,7 @@ namespace TCGCardTracker
                     new Setting(Plugin.PointAndSlotsVariants, "Random versions"),
                     new Setting(Plugin.PointAndSlotsKeepPoints, "Keep points on save", startup: true),
                     new Setting(Plugin.PointAndSlotsPackPoints, "Points for packs", startup: true),
+                    new Setting(Plugin.PointAndSlotsBulkAmounts, "Bulk shop amounts", startup: true),
                 }),
                 ("TCG Marketplace", new[]
                 {

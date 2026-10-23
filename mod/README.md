@@ -69,6 +69,9 @@ Press **F7** in your shop to open it.
   optionally followed by Foil (`Common - Foil` is a Base foil). Such a reward gives that version rather than a random
   one; if a TCG Studio set doesn't have it, you get the closest version it has. The slot win screen names the
   version won.
+- **Bulk amounts in the Point And Slots shop:** hold Shift while clicking a card's - or + to change the amount
+  by 10, or Ctrl for 100. Or click the amount between the buttons, type a number and press Enter to put exactly
+  that many in the cart (0 takes the card out). Turn it off with `[Point And Slots] BulkAmounts`.
 - **Faster TCG Marketplace sales:** with the TCG Marketplace mod installed, listings sell much faster than its
   own pace of a customer every 2 - 4 seconds buying 1 - 2 cards. By default a customer comes about every second
   (`[TCG Marketplace] CustomerSeconds`) and buys up to 10 cards (`CardsPerCustomer`), and each listing is checked

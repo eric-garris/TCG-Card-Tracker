@@ -50,6 +50,7 @@ namespace TCGCardTracker
                 InstallSlotVersions(harmony);
                 if (Plugin.PointAndSlotsKeepPoints.Value) InstallKeepPoints(harmony);
                 if (Plugin.PointAndSlotsPackPoints.Value) InstallPackPoints(harmony);
+                if (Plugin.PointAndSlotsBulkAmounts.Value) ShopQuantity.Install(harmony);
                 var buildSlots = AccessTools.Method(AccessTools.TypeByName(Slots), "BuildUi");
                 if (buildSlots != null) harmony.Patch(buildSlots, postfix: new HarmonyMethod(typeof(PointAndSlots), nameof(AfterBuildSlots)));
                 var tableFrame = AccessTools.Method(AccessTools.TypeByName(Slots), "SetPayoutTableFrame");
