@@ -15,8 +15,14 @@ namespace TCGCardTracker
     ///   (MarketplaceService.NextCustomerIntervalSeconds, clamped by NormalizeInterval) who buys 1 - 2 cards
     ///   (NextCustomerPurchaseCount, clamped to 2 in TryBeginCustomer).
     ///
+    /// - Each paid card is then committed with a full save of its state, and Tick does nothing else until that save is
+    ///   done. Commits wait only 0.15 s for more payments (DrainPaidSaleCommitQueue), and payments go one at a time,
+    ///   so a customer's cards are mostly committed (and saved) one by one: about one card per save, whatever the
+    ///   customer buys.
+    ///
     /// Patches here swap in <see cref="Plugin.MarketCustomerSeconds"/>, <see cref="Plugin.MarketCardsPerCustomer"/>
-    /// and <see cref="Plugin.MarketRecheckSeconds"/>. Its payment and saving steps are left alone. Everything is found
+    /// and <see cref="Plugin.MarketRecheckSeconds"/>, and let commits wait for all of a customer's payments so they
+    /// are saved together. Its payment and saving steps are left alone. Everything is found
     /// by name, so the mod isn't needed at build time.
     /// </summary>
     internal static class Marketplace
@@ -26,8 +32,13 @@ namespace TCGCardTracker
         private const string Scheduler = "TCGMarketplace.MarketplaceCustomerScheduler";
         private const string Demand = "TCGMarketplace.MarketplaceDemand";
 
+        /// <summary>Longest wait for more payments before paid cards are committed (theirs: 0.15 s).</summary>
+        private const float CommitWindowSeconds = 5f;
+
         private static readonly Random Rng = new Random();
         private static AccessTools.FieldRef<object, int>? _requested;
+        private static object? _service;
+        private static float _nextReport;
 
         public static void Install()
         {
@@ -52,6 +63,11 @@ namespace TCGCardTracker
                 harmony.Patch(Method(AccessTools.TypeByName(Demand), "GetInitialBuyerCheckDelaySeconds"),
                     postfix: new HarmonyMethod(typeof(Marketplace), nameof(AfterFirstCheck)));
                 Plugin.Log.LogInfo($"TCG Marketplace: listings checked for buyers about every {Plugin.MarketRecheckSeconds.Value:0.##} s.");
+
+                var commitWindow = new HarmonyMethod(typeof(Marketplace), nameof(CommitWindowTranspiler));
+                harmony.Patch(Method(service, "EnqueuePaidSaleCommit"), transpiler: commitWindow);
+                harmony.Patch(Method(service, "DrainPaidSaleCommitQueue"), transpiler: commitWindow);
+                Plugin.Log.LogInfo("TCG Marketplace: a customer's cards are saved together.");
             }
             catch (Exception e)
             {
@@ -66,8 +82,9 @@ namespace TCGCardTracker
             harmony.Patch(Method(type, name), prefix: new HarmonyMethod(typeof(Marketplace), patch));
 
         /// <summary>Prefix on MarketplaceService.NextCustomerIntervalSeconds: our gap instead of 2 - 4 seconds.</summary>
-        private static bool BeforeNextInterval(ref float __result)
+        private static bool BeforeNextInterval(object __instance, ref float __result)
         {
+            _service = __instance;
             __result = SaleSpeed.CustomerInterval(Plugin.MarketCustomerSeconds.Value, Rng.NextDouble());
             return false;
         }
@@ -124,6 +141,51 @@ namespace TCGCardTracker
         /// <summary>Stands in for <c>time.AddSeconds(seconds)</c> (same stack: the DateTime's address, then the seconds).</summary>
         private static DateTime Recheck(ref DateTime time, double seconds) =>
             time.AddSeconds(SaleSpeed.Recheck(seconds, Plugin.MarketRecheckSeconds.Value));
+
+        /// <summary>
+        /// EnqueuePaidSaleCommit and DrainPaidSaleCommitQueue hold paid cards back from committing for 0.15 s while more
+        /// payments are on the way. Each holds that one constant; it becomes <see cref="CommitWindowSeconds"/>. A batch
+        /// still commits as soon as no payment is pending, or at 32 cards.
+        /// </summary>
+        private static IEnumerable<CodeInstruction> CommitWindowTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
+        {
+            int swapped = 0;
+            foreach (var code in instructions)
+            {
+                if (code.opcode == System.Reflection.Emit.OpCodes.Ldc_R4 && code.operand is float f && Math.Abs(f - 0.15f) < 1e-6f)
+                {
+                    code.operand = CommitWindowSeconds;
+                    swapped++;
+                }
+                yield return code;
+            }
+            if (swapped != 1)
+                Plugin.LogOnce("market:commit:" + __originalMethod.Name,
+                    $"TCG Marketplace's sale commit looks different than expected ({swapped} waits found in {__originalMethod.Name}).");
+        }
+
+        /// <summary>Once a minute while cards are selling, log how fast, for checking the settings against the game.</summary>
+        public static void Tick()
+        {
+            if (_service == null || UnityEngine.Time.unscaledTime < _nextReport) return;
+            _nextReport = UnityEngine.Time.unscaledTime + 60f;
+            try
+            {
+                var t = Traverse.Create(_service);
+                int cards = t.Property("DiagnosticCardsSoldLastMinute").GetValue<int>();
+                if (cards == 0) return;
+                Plugin.Log.LogInfo($"TCG Marketplace last minute: {cards} cards to " +
+                                   $"{t.Property("DiagnosticCustomersProcessedLastMinute").GetValue<int>()} customers " +
+                                   $"(last bought {t.Property("DiagnosticLastCustomerPurchaseCount").GetValue<int>()}), " +
+                                   $"{t.Property("DiagnosticCustomerQueueLength").GetValue<int>()} waiting; save " +
+                                   $"{t.Property("DiagnosticSaleBackgroundWriteMs").GetValue<double>():0} ms, payment " +
+                                   $"{t.Property("DiagnosticPaymentJournalWriteMs").GetValue<double>():0} ms.");
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("market:report", "Could not read TCG Marketplace's sale numbers: " + e.Message);
+            }
+        }
 
         /// <summary>Postfix on MarketplaceDemand.GetInitialBuyerCheckDelaySeconds: a new listing's first check, scaled the same.</summary>
         private static void AfterFirstCheck(ref int __result) =>
