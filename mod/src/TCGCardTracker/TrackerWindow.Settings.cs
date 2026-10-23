@@ -78,6 +78,13 @@ namespace TCGCardTracker
                     new Setting(Plugin.PointAndSlotsKeepPoints, "Keep points on save", startup: true),
                     new Setting(Plugin.PointAndSlotsPackPoints, "Points for packs", startup: true),
                 }),
+                ("TCG Marketplace", new[]
+                {
+                    new Setting(Plugin.MarketFasterSales, "Faster sales", startup: true),
+                    new Setting(Plugin.MarketCustomerSeconds, "Seconds between customers", min: 0.25f, max: 10f, step: 0.25f),
+                    new Setting(Plugin.MarketCardsPerCustomer, "Cards per customer", min: 1f, max: 50f, step: 1f),
+                    new Setting(Plugin.MarketRecheckSeconds, "Check listings every (s)", min: 1f, max: 25f, step: 1f),
+                }),
             };
             return _settings;
         }

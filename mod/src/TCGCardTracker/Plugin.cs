@@ -13,11 +13,13 @@ namespace TCGCardTracker
     [BepInDependency(CustomTrades.StudioGuid, BepInDependency.DependencyFlags.SoftDependency)]
     // And after Point And Slots, so its catalog exists to patch.
     [BepInDependency(PointAndSlots.Guid, BepInDependency.DependencyFlags.SoftDependency)]
+    // And after TCG Marketplace, so its sale code exists to patch.
+    [BepInDependency(Marketplace.Guid, BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.11.0";
+        public const string Version = "0.12.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -37,6 +39,10 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> PointAndSlotsVariants = null!;
         internal static ConfigEntry<bool> PointAndSlotsKeepPoints = null!;
         internal static ConfigEntry<bool> PointAndSlotsPackPoints = null!;
+        internal static ConfigEntry<bool> MarketFasterSales = null!;
+        internal static ConfigEntry<float> MarketCustomerSeconds = null!;
+        internal static ConfigEntry<float> MarketCardsPerCustomer = null!;
+        internal static ConfigEntry<float> MarketRecheckSeconds = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -106,6 +112,20 @@ namespace TCGCardTracker
                 "With the Point And Slots mod installed: give its PointsPerPackOpened for each pack you open. Point And Slots " +
                 "waits for a game event that some pack openings never send (no points at all); packs it does count are not " +
                 "counted twice.");
+            MarketFasterSales = Config.Bind("TCG Marketplace", "FasterSales", true,
+                "With the TCG Marketplace mod installed: sell your listings at the pace set below instead of its own " +
+                "(a customer every 2 - 4 seconds buying 1 - 2 cards, each listing checked for a buyer every 15 - 25 seconds). " +
+                "Prices, sale chances, payments and saving stay as TCG Marketplace does them. " +
+                "This hooks TCG Marketplace's code; when it is off at startup, the hook is not installed at all.");
+            MarketCustomerSeconds = Config.Bind("TCG Marketplace", "CustomerSeconds", 1f,
+                "Seconds between two TCG Marketplace customers, give or take a quarter (0.25 - 10). TCG Marketplace's own: 2 - 4.");
+            MarketCardsPerCustomer = Config.Bind("TCG Marketplace", "CardsPerCustomer", 10f,
+                "Most cards one TCG Marketplace customer buys (1 - 50); each buys from half that to all of it, if that " +
+                "many have found a buyer. TCG Marketplace's own: 2.");
+            MarketRecheckSeconds = Config.Bind("TCG Marketplace", "RecheckSeconds", 5f,
+                "About how often, in seconds, each TCG Marketplace listing is checked for a buyer (1 - 25). Each check can " +
+                "sell one copy, so this matters most for listings with many copies. A new listing's first check comes " +
+                "sooner by the same amount. TCG Marketplace's own: 15 - 25 (20 on average).");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
             TrackerWindow.CaptureStartupSettings();
@@ -120,6 +140,7 @@ namespace TCGCardTracker
             if (TradeBanners.Value) TradeBanner.Install();
             CustomTrades.Install();
             PointAndSlots.Install();
+            Marketplace.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
