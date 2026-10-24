@@ -19,7 +19,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.13.1";
+        public const string Version = "0.13.2";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -44,6 +44,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<float> MarketCustomerSeconds = null!;
         internal static ConfigEntry<float> MarketCardsPerCustomer = null!;
         internal static ConfigEntry<float> MarketRecheckSeconds = null!;
+        internal static ConfigEntry<float> MarketSaleChance = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -120,17 +121,22 @@ namespace TCGCardTracker
             MarketFasterSales = Config.Bind("TCG Marketplace", "FasterSales", true,
                 "With the TCG Marketplace mod installed: sell your listings at the pace set below instead of its own " +
                 "(a customer every 2 - 4 seconds buying 1 - 2 cards, each listing checked for a buyer every 15 - 25 seconds). " +
-                "Prices, sale chances, payments and saving stay as TCG Marketplace does them. " +
+                "Prices, payments and saving stay as TCG Marketplace does them, and sale chances too unless SaleChance is raised. " +
                 "This hooks TCG Marketplace's code; when it is off at startup, the hook is not installed at all.");
             MarketCustomerSeconds = Config.Bind("TCG Marketplace", "CustomerSeconds", 1f,
                 "Seconds between two TCG Marketplace customers, give or take a quarter (0.25 - 10). TCG Marketplace's own: 2 - 4.");
             MarketCardsPerCustomer = Config.Bind("TCG Marketplace", "CardsPerCustomer", 10f,
                 "Most cards one TCG Marketplace customer buys (1 - 50); each buys from half that to all of it, if that " +
-                "many have found a buyer. TCG Marketplace's own: 2.");
-            MarketRecheckSeconds = Config.Bind("TCG Marketplace", "RecheckSeconds", 5f,
-                "About how often, in seconds, each TCG Marketplace listing is checked for a buyer (1 - 25). Each check can " +
+                "many have found a buyer. A customer buys at most one copy from each listing, so with few listings " +
+                "RecheckSeconds and SaleChance matter more. TCG Marketplace's own: 2.");
+            MarketRecheckSeconds = Config.Bind("TCG Marketplace", "RecheckSeconds", 2f,
+                "About how often, in seconds, each TCG Marketplace listing is checked for a buyer (0.5 - 25). Each check can " +
                 "sell one copy, so this matters most for listings with many copies. A new listing's first check comes " +
                 "sooner by the same amount. TCG Marketplace's own: 15 - 25 (20 on average).");
+            MarketSaleChance = Config.Bind("TCG Marketplace", "SaleChance", 1f,
+                "Multiplies the chance (1 - 10, capped at 100%) that a TCG Marketplace listing finds a buyer at each check. " +
+                "TCG Marketplace sets that chance by your price against market value: 80% at 85% of market or less, 55% at " +
+                "95%, 25% at 105%, and much lower above. 1 leaves it as TCG Marketplace has it.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
             TrackerWindow.CaptureStartupSettings();

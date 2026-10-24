@@ -35,6 +35,16 @@ namespace TCGCardTracker.Tests
             Assert.Equal(15, SaleSpeed.Recheck(15, 0f), 3);
         }
 
+        [Theory]
+        [InlineData(0.25, 1f, 0.25)]
+        [InlineData(0.25, 3f, 0.75)]
+        [InlineData(0.8, 3f, 1.0)]
+        [InlineData(0.0, 5f, 0.0)]
+        [InlineData(0.25, 0.5f, 0.25)]
+        [InlineData(0.25, float.NaN, 0.25)]
+        public void SaleChanceMultipliesUpToCertain(double theirs, float multiplier, double expected) =>
+            Assert.Equal(expected, SaleSpeed.SaleChance(theirs, multiplier), 6);
+
         [Fact]
         public void FirstCheckScalesAndStaysWhole()
         {

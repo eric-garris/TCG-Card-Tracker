@@ -63,6 +63,8 @@ namespace TCGCardTracker
                 harmony.Patch(Method(AccessTools.TypeByName(Demand), "GetInitialBuyerCheckDelaySeconds"),
                     postfix: new HarmonyMethod(typeof(Marketplace), nameof(AfterFirstCheck)));
                 Plugin.Log.LogInfo($"TCG Marketplace: listings checked for buyers about every {Plugin.MarketRecheckSeconds.Value:0.##} s.");
+                harmony.Patch(Method(AccessTools.TypeByName(Demand), "GetSaleProbability"),
+                    postfix: new HarmonyMethod(typeof(Marketplace), nameof(AfterSaleProbability)));
 
                 var commitWindow = new HarmonyMethod(typeof(Marketplace), nameof(CommitWindowTranspiler));
                 harmony.Patch(Method(service, "EnqueuePaidSaleCommit"), transpiler: commitWindow);
@@ -186,6 +188,10 @@ namespace TCGCardTracker
                 Plugin.LogOnce("market:report", "Could not read TCG Marketplace's sale numbers: " + e.Message);
             }
         }
+
+        /// <summary>Postfix on MarketplaceDemand.GetSaleProbability: the chance a check finds a buyer, times SaleChance.</summary>
+        private static void AfterSaleProbability(ref double __result) =>
+            __result = SaleSpeed.SaleChance(__result, Plugin.MarketSaleChance.Value);
 
         /// <summary>Postfix on MarketplaceDemand.GetInitialBuyerCheckDelaySeconds: a new listing's first check, scaled the same.</summary>
         private static void AfterFirstCheck(ref int __result) =>
