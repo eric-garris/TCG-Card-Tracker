@@ -76,7 +76,8 @@ Press **F7** in your shop to open it.
   own pace of a customer every 2 - 4 seconds buying 1 - 2 cards. By default a customer comes about every second
   (`[TCG Marketplace] CustomerSeconds`) and buys up to 10 cards (`CardsPerCustomer`), and each listing is checked
   for a buyer about every 5 seconds instead of 15 - 25 (`RecheckSeconds`). Prices, sale chances and payments are
-  unchanged. Turn it off with `[TCG Marketplace] FasterSales`.
+  unchanged. A customer's cards are also saved in one go instead of one by one, which was the real limit on
+  bulk sales. Once a minute while cards sell, the BepInEx log notes how many sold. Turn it off with `[TCG Marketplace] FasterSales`.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
