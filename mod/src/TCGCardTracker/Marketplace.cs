@@ -19,6 +19,8 @@ namespace TCGCardTracker
     ///   done. Commits wait only 0.15 s for more payments (DrainPaidSaleCommitQueue), and payments go one at a time,
     ///   so a customer's cards are mostly committed (and saved) one by one: about one card per save, whatever the
     ///   customer buys.
+    /// - After a sale, CommitMarketplaceSalesBatch (and CommitMarketplaceSaleLegacy) put the listing's next check
+    ///   15 - 25 seconds away again, so a listing sells at most one copy every 20 seconds or so.
     ///
     /// Patches here swap in <see cref="Plugin.MarketCustomerSeconds"/>, <see cref="Plugin.MarketCardsPerCustomer"/>
     /// and <see cref="Plugin.MarketRecheckSeconds"/>, and let commits wait for all of a customer's payments so they
@@ -58,8 +60,10 @@ namespace TCGCardTracker
                 Plugin.Log.LogInfo($"TCG Marketplace: a customer about every {Plugin.MarketCustomerSeconds.Value:0.##} s, " +
                                    $"buying up to {SaleSpeed.PurchaseCount(Plugin.MarketCardsPerCustomer.Value, 0.9999)} cards.");
 
-                harmony.Patch(Method(service, "EvaluateActiveListings"),
-                    transpiler: new HarmonyMethod(typeof(Marketplace), nameof(RecheckTranspiler)));
+                var recheck = new HarmonyMethod(typeof(Marketplace), nameof(RecheckTranspiler));
+                harmony.Patch(Method(service, "EvaluateActiveListings"), transpiler: recheck);
+                harmony.Patch(Method(service, "CommitMarketplaceSalesBatch"), transpiler: recheck);
+                harmony.Patch(Method(service, "CommitMarketplaceSaleLegacy"), transpiler: recheck);
                 harmony.Patch(Method(AccessTools.TypeByName(Demand), "GetInitialBuyerCheckDelaySeconds"),
                     postfix: new HarmonyMethod(typeof(Marketplace), nameof(AfterFirstCheck)));
                 Plugin.Log.LogInfo($"TCG Marketplace: listings checked for buyers about every {Plugin.MarketRecheckSeconds.Value:0.##} s.");
@@ -118,10 +122,11 @@ namespace TCGCardTracker
         }
 
         /// <summary>
-        /// EvaluateActiveListings sets a listing's next check with DateTime.UtcNow.AddSeconds(15 + random 0 - 10). Its
-        /// only AddSeconds call becomes <see cref="Recheck"/>, which scales that delay.
+        /// EvaluateActiveListings, and the sale commits after a sale, set a listing's next check with
+        /// DateTime.UtcNow.AddSeconds(15 + random 0 - 10). Each method's only AddSeconds call becomes
+        /// <see cref="Recheck"/>, which scales that delay.
         /// </summary>
-        private static IEnumerable<CodeInstruction> RecheckTranspiler(IEnumerable<CodeInstruction> instructions)
+        private static IEnumerable<CodeInstruction> RecheckTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase __originalMethod)
         {
             var addSeconds = AccessTools.Method(typeof(DateTime), nameof(DateTime.AddSeconds));
             var recheck = AccessTools.Method(typeof(Marketplace), nameof(Recheck));
@@ -137,7 +142,8 @@ namespace TCGCardTracker
                 yield return code;
             }
             if (swapped != 1)
-                Plugin.LogOnce("market:recheck", $"TCG Marketplace's listing check looks different than expected ({swapped} timers found).");
+                Plugin.LogOnce("market:recheck:" + __originalMethod.Name,
+                    $"TCG Marketplace's listing check looks different than expected ({swapped} timers found in {__originalMethod.Name}).");
         }
 
         /// <summary>Stands in for <c>time.AddSeconds(seconds)</c> (same stack: the DateTime's address, then the seconds).</summary>
