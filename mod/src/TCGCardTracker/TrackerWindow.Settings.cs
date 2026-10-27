@@ -84,7 +84,8 @@ namespace TCGCardTracker
                     new Setting(Plugin.MarketFasterSales, "Faster sales", startup: true),
                     new Setting(Plugin.MarketCustomerSeconds, "Seconds between customers", min: 0.25f, max: 10f, step: 0.25f),
                     new Setting(Plugin.MarketCardsPerCustomer, "Cards per customer", min: 1f, max: 50f, step: 1f),
-                    new Setting(Plugin.MarketRecheckSeconds, "Check listings every (s)", min: 1f, max: 25f, step: 1f),
+                    new Setting(Plugin.MarketRecheckSeconds, "Check listings every (s)", min: 0.5f, max: 25f, step: 0.5f),
+                    new Setting(Plugin.MarketSaleChance, "Sale chance multiplier", min: 1f, max: 10f, step: 0.5f),
                 }),
             };
             return _settings;

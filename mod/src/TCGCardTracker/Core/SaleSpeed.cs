@@ -38,6 +38,13 @@ namespace TCGCardTracker.Core
             return Math.Max(0.5, theirSeconds * recheck / TheirRecheckSeconds);
         }
 
+        /// <summary>The marketplace's chance that a listing finds a buyer, times <paramref name="multiplier"/>, at most 1.</summary>
+        public static double SaleChance(double theirs, float multiplier)
+        {
+            if (theirs <= 0 || float.IsNaN(multiplier) || multiplier <= 1f) return theirs;
+            return Math.Min(1.0, theirs * multiplier);
+        }
+
         /// <summary>The wait before a new listing's first check, scaled the same way (whole seconds, at least 1).</summary>
         public static int FirstCheck(int theirSeconds, float recheck) =>
             Math.Max(1, (int)Math.Round(Recheck(theirSeconds, recheck)));
