@@ -19,7 +19,8 @@ Press **F7** in your shop to open it.
   card boxes, in hand, donation boxes and pack openers. Each place can be switched off.
 - **New for your collection:** after you open packs, a short popup lists the cards that are new to
   you (no copy anywhere you count) or that you now own at a better grade than before. It appears
-  once the opening screen closes, so it never spoils a reveal.
+  once the opening screen closes, so it never spoils a reveal. Cards from an auto pack opener get
+  the same popup when you collect them from the machine.
   Turn it off with `NewCardPopup`. `PopupSeconds` (12 by default) and `PopupScale` set how long
   it stays and how big it is.
 - Custom card sets added by a card-set mod such as [TCG Studio](https://github.com/GrimGrab/TCG-Studio)
@@ -81,7 +82,7 @@ Press **F7** in your shop to open it.
   bulk sales. Once a minute while cards sell, the BepInEx log notes how many sold. Turn it off with `[TCG Marketplace] FasterSales`.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
-  code (pack opening and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
+  code (pack opening, collecting from pack openers and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
   that hook isn't installed. The
   one thing it changes is which set a trading customer's card, and the card they ask for, comes
   from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
