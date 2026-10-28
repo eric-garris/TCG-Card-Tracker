@@ -80,6 +80,10 @@ Press **F7** in your shop to open it.
   each listing, so with few listings `RecheckSeconds` and `SaleChance` (a multiplier on each check's chance of a buyer,
   1 by default) set the pace. Prices and payments are unchanged. A customer's cards are also saved in one go instead of one by one, which was the real limit on
   bulk sales. Once a minute while cards sell, the BepInEx log notes how many sold. Turn it off with `[TCG Marketplace] FasterSales`.
+- **TCG Studio pack and box art on game 1.03+:** the game's Unity 6 build draws a pack's art in several texture
+  slots (colour, glow, shine), and TCG Studio only replaces the first, so custom packs and boxes looked vanilla. The
+  tracker puts TCG Studio's art in every slot that held the vanilla art, and logs how the game draws the vanilla pack and
+  box. Turn it off with `[TCG Studio] FixPackSkins`.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening, collecting from pack openers and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
@@ -87,7 +91,8 @@ Press **F7** in your shop to open it.
   one thing it changes is which set a trading customer's card, and the card they ask for, comes
   from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
   custom sets to that mod's card list and, once per new rarity name, to its rarity settings. With TCG Marketplace
-  installed, it changes how fast that mod's listings sell.
+  installed, it changes how fast that mod's listings sell. With TCG Studio installed, it changes which picture its
+  custom packs and boxes draw (`FixPackSkins`).
 
 ## Install
 
@@ -104,7 +109,7 @@ Most settings can be changed in game on the tracker's **Settings** tab (press F7
 Hover a setting to see what it does; changes are saved straight away. A setting that shows `*` after you change it needs a
 game restart. They are all also in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), TCG Marketplace sale speed (`FasterSales`, `CustomerSeconds`, `CardsPerCustomer`, `RecheckSeconds`, `SaleChance`), which places are counted, and
+(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio pack art (`FixPackSkins`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), TCG Marketplace sale speed (`FasterSales`, `CustomerSeconds`, `CardsPerCustomer`, `RecheckSeconds`, `SaleChance`), which places are counted, and
 `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.
