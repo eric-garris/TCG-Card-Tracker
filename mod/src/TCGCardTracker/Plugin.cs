@@ -94,10 +94,10 @@ namespace TCGCardTracker
                 "its custom sets instead of a vanilla one. They only ask for a card you own, at a fair price for what they offer " +
                 "(75% - 150% of it, as the game does); with none, they ask for a vanilla card as usual. 0 leaves this to the game.");
             FixPackSkins = Config.Bind("TCG Studio", "FixPackSkins", true,
-                "With TCG Studio installed: draw its custom booster pack and box art in every texture slot of the game's " +
-                "pack and box materials. Since game 1.03 (Unity 6) those materials draw the art more than once (colour, glow, " +
-                "shine), and TCG Studio only replaces the first, so the vanilla art shows. Turn off if TCG Studio fixes this " +
-                "itself. Also logs how the game draws the vanilla pack and box. Takes effect after a restart.");
+                "With TCG Studio installed: show its custom booster pack and box art on the 3D packs and boxes. Since game 1.03 " +
+                "(Unity 6) the game draws all packs from one stacked texture (a texture array), and TCG Studio's art doesn't reach " +
+                "it, so custom packs looked vanilla. Turn off if TCG Studio fixes this itself. Also logs how the game draws the " +
+                "vanilla pack and box. Takes effect after a restart.");
             PointAndSlotsSets = Config.Bind("Point And Slots", "CustomSets", true,
                 "With TCG Studio and the Point And Slots mod installed: put TCG Studio's sets in Point And Slots' point shop and " +
                 "slot machine (a set counts as unlocked once you own one of its pack licenses), with their real set and rarity names. " +

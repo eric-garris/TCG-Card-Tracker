@@ -80,10 +80,10 @@ Press **F7** in your shop to open it.
   each listing, so with few listings `RecheckSeconds` and `SaleChance` (a multiplier on each check's chance of a buyer,
   1 by default) set the pace. Prices and payments are unchanged. A customer's cards are also saved in one go instead of one by one, which was the real limit on
   bulk sales. Once a minute while cards sell, the BepInEx log notes how many sold. Turn it off with `[TCG Marketplace] FasterSales`.
-- **TCG Studio pack and box art on game 1.03+:** the game's Unity 6 build draws a pack's art in several texture
-  slots (colour, glow, shine), and TCG Studio only replaces the first, so custom packs and boxes looked vanilla. The
-  tracker puts TCG Studio's art in every slot that held the vanilla art, and logs how the game draws the vanilla pack and
-  box. Turn it off with `[TCG Studio] FixPackSkins`.
+- **TCG Studio pack and box art on game 1.03+:** the game's Unity 6 build draws all booster packs and boxes from
+  one stacked texture (a texture array), each pack picking its layer, and TCG Studio's art never reaches it, so custom
+  packs and boxes looked vanilla. The tracker gives each custom pack and box its own one-layer array of TCG Studio's art,
+  on the shelf, in hand, in bags and boxes and while opening. Turn it off with `[TCG Studio] FixPackSkins`.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening, collecting from pack openers and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off

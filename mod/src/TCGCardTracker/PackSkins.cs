@@ -2,22 +2,26 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using HarmonyLib;
 using UnityEngine;
-using UnityEngine.Rendering;
 
 namespace TCGCardTracker
 {
     /// <summary>
     /// Puts TCG Studio's custom booster pack and box art back on the 3D models in the game's Unity 6 build (1.03+).
     ///
-    /// TCG Studio gives each custom pack/box a copy of the vanilla pack/box material with only
-    /// <see cref="Material.mainTexture"/> swapped. The Unity 6 build draws items with Toony Colors Pro 2's Hybrid
-    /// shader, which samples the same art again as _EmissionMap and _SpecGlossMap (and an item can draw more
-    /// materials from materialSecondary / materialList), so the vanilla art keeps showing. A postfix on TCG Studio's
-    /// ItemInjector.EnsureInjected gives each custom item a material copy where every texture slot and material
-    /// that held the vanilla art draws the custom art. The vanilla materials are logged once, so the next game
-    /// change can be read from a log.
+    /// Since 1.03 the game draws packs and boxes with one shared material per kind (CardPackArrayMaterial,
+    /// CardBoxMaterial, shader Unlit/UnlitWithShadowcasterTexture2dArray) whose art is a Texture2DArray
+    /// (_MainTexArray); each item picks its layer with _TexIndex (ItemMeshData.textureIndex, set through a
+    /// MaterialPropertyBlock). TCG Studio still swaps a plain texture into _MainTex, which that shader never reads,
+    /// and its items copy the vanilla pack's layer number, so they show vanilla art.
+    ///
+    /// For each custom pack/box this builds a one-layer array of TCG Studio's art (a GPU copy, so it also works on
+    /// its non-readable textures) and:
+    /// - gives its ItemMeshData a material that draws that array, at layer 0 (shelves, hands, customers, boxes);
+    /// - adds the array to the item's property block (the pack opening animation draws the shared vanilla
+    ///   material with the item's block), and clears it again when a pooled item becomes something else.
     /// </summary>
     internal static class PackSkins
     {
@@ -25,7 +29,17 @@ namespace TCGCardTracker
         private const string Registry = "TCGCustomCards.Runtime.Registry";
         private const string ImageCache = "TCGCustomCards.Runtime.ImageCache";
 
-        private static readonly HashSet<EItemType> Logged = new HashSet<EItemType>();
+        private static readonly int ArrayId = Shader.PropertyToID("_MainTexArray");
+        private static readonly int IndexId = Shader.PropertyToID("_TexIndex");
+
+        /// <summary>One-layer arrays by custom item.</summary>
+        private static readonly Dictionary<EItemType, Texture> Arrays = new Dictionary<EItemType, Texture>();
+        /// <summary>Renderers our array is set on (pooled items move between item types).</summary>
+        private static readonly HashSet<Renderer> Marked = new HashSet<Renderer>();
+
+        private static readonly FieldInfo? TextureIndex = AccessTools.Field(typeof(ItemMeshData), "textureIndex");
+        private static readonly PropertyInfo? ItemBlock = AccessTools.Property(typeof(Item), "m_MaterialPropertyBlock");
+        private static readonly FieldInfo? SecondaryRenderer = AccessTools.Field(typeof(Item), "m_MeshSecondary");
         private static object? _fixedFor;
 
         public static void Install()
@@ -40,11 +54,18 @@ namespace TCGCardTracker
                     Plugin.Log.LogWarning("Could not find where TCG Studio adds its packs (a newer TCG Studio?); pack art is left to it.");
                     return;
                 }
+                if (TextureIndex == null)
+                {
+                    Plugin.Log.LogInfo("TCG Studio pack and box art: this game version draws packs the old way, left to TCG Studio.");
+                    return;
+                }
                 var harmony = new Harmony(Plugin.Guid);
                 harmony.Patch(target, postfix: new HarmonyMethod(typeof(PackSkins), nameof(AfterInjected)));
+                var setBlock = AccessTools.Method(typeof(Item), "SetPropertyBlock");
+                if (setBlock != null) harmony.Patch(setBlock, postfix: new HarmonyMethod(typeof(PackSkins), nameof(AfterSetPropertyBlock)));
                 var setMesh = AccessTools.Method(typeof(Item), nameof(Item.SetMesh));
                 if (setMesh != null) harmony.Patch(setMesh, postfix: new HarmonyMethod(typeof(PackSkins), nameof(AfterSetMesh)));
-                Plugin.Log.LogInfo("TCG Studio pack and box art: the tracker puts it in every texture slot.");
+                Plugin.Log.LogInfo("TCG Studio pack and box art: the tracker draws it through the game's pack texture arrays.");
             }
             catch (Exception e)
             {
@@ -71,26 +92,22 @@ namespace TCGCardTracker
                     return;
                 }
 
-                int packs = 0, boxes = 0, slots = 0;
-                var registry = AccessTools.TypeByName(Registry);
-                var list = AccessTools.Field(registry, "Packs")?.GetValue(null) as IEnumerable;
+                var list = AccessTools.Field(AccessTools.TypeByName(Registry), "Packs")?.GetValue(null) as IEnumerable;
                 if (list == null)
                 {
                     Plugin.Log.LogWarning("Could not read TCG Studio's pack list (a newer TCG Studio?); pack art is left to it.");
                     return;
                 }
+                int packs = 0, boxes = 0;
                 foreach (var pack in list)
                 {
                     var t = Traverse.Create(pack);
                     var def = t.Field("Def");
                     var setDef = t.Field("Set").Field("Def").GetValue();
-                    int n;
-                    if ((n = Fix(meshes, vPack, (EItemType)t.Field("PackItem").GetValue(), setDef, def.Field("PackTexture").GetValue() as string)) >= 0)
-                    { packs++; slots += n; }
-                    if ((n = Fix(meshes, vBox, (EItemType)t.Field("BoxItem").GetValue(), setDef, def.Field("BoxTexture").GetValue() as string)) >= 0)
-                    { boxes++; slots += n; }
+                    if (Fix(meshes, vPack, (EItemType)t.Field("PackItem").GetValue(), setDef, def.Field("PackTexture").GetValue() as string)) packs++;
+                    if (Fix(meshes, vBox, (EItemType)t.Field("BoxItem").GetValue(), setDef, def.Field("BoxTexture").GetValue() as string)) boxes++;
                 }
-                Plugin.Log.LogInfo($"TCG Studio pack and box art: {packs} pack(s) and {boxes} box(es) now draw their art in {slots} texture slot(s).");
+                Plugin.Log.LogInfo($"TCG Studio pack and box art: {packs} pack(s) and {boxes} box(es) now draw their own art.");
             }
             catch (Exception e)
             {
@@ -98,40 +115,61 @@ namespace TCGCardTracker
             }
         }
 
-        /// <summary>
-        /// Gives one custom item a material that draws <paramref name="file"/> wherever the vanilla item drew its art.
-        /// Returns the number of texture slots set, or -1 when the item has no custom art.
-        /// </summary>
-        private static int Fix(List<ItemMeshData> meshes, ItemMeshData vanilla, EItemType item, object? setDef, string? file)
+        /// <summary>Gives one custom item a one-layer array of its art. False when it has no art or the copy fails.</summary>
+        private static bool Fix(List<ItemMeshData> meshes, ItemMeshData vanilla, EItemType item, object? setDef, string? file)
         {
             int i = (int)item;
-            if (item == EItemType.None || i < 0 || i >= meshes.Count || string.IsNullOrEmpty(file) || setDef == null) return -1;
+            if (item == EItemType.None || i < 0 || i >= meshes.Count || string.IsNullOrEmpty(file) || setDef == null) return false;
+            var shared = vanilla.material;
+            if (shared == null || !shared.HasProperty(ArrayId)) return false; // not an array material: nothing to fix
             var tex = Load(setDef, file!);
-            var art = Art(vanilla.material);
-            if (tex == null || art == null) return -1;
+            if (tex == null) return false;
+            var array = ToArray(tex, item);
+            if (array == null) return false;
 
             var md = meshes[i];
-            int slots = 0;
             var copies = new Dictionary<Material, Material>();
             Material? Swap(Material? m)
             {
-                if (m == null) return m;
+                if (m == null || !m.HasProperty(ArrayId)) return m;
                 if (copies.TryGetValue(m, out var c)) return c;
-                // TCG Studio's own per-item copy (art on the main slot only) is fixed in place; a shared vanilla
-                // material that draws the art gets a copy of its own.
-                bool own = m.name.StartsWith("TCGCC_", StringComparison.Ordinal);
-                if (!own && m != vanilla.material && Art(m) != art) return copies[m] = m;
-                c = own ? m : new Material(m) { name = "TCGCT_" + (int)item + "_" + m.name, hideFlags = HideFlags.DontUnloadUnusedAsset };
-                foreach (var prop in c.GetTexturePropertyNames())
-                    if (c.GetTexture(prop) == art) { c.SetTexture(prop, tex); slots++; }
-                SetMain(c, tex);
+                // TCG Studio's own per-item copy is changed in place; a shared vanilla material gets a copy of its own.
+                c = m.name.StartsWith("TCGCC_", StringComparison.Ordinal) ? m
+                    : new Material(m) { name = "TCGCT_" + i + "_" + m.name, hideFlags = HideFlags.DontUnloadUnusedAsset };
+                c.SetTexture(ArrayId, array);
                 return copies[m] = c;
             }
             md.material = Swap(md.material);
             md.materialSecondary = Swap(md.materialSecondary);
             if (md.materialList != null)
                 for (int k = 0; k < md.materialList.Count; k++) md.materialList[k] = Swap(md.materialList[k])!;
-            return slots;
+            TextureIndex!.SetValue(md, (ushort)0);
+            Arrays[item] = array;
+            return true;
+        }
+
+        /// <summary>A one-layer Texture2DArray holding <paramref name="tex"/> (all mip levels), or null.</summary>
+        private static Texture? ToArray(Texture tex, EItemType item)
+        {
+            try
+            {
+                if (!(tex is Texture2D t2)) return null;
+                var array = new Texture2DArray(t2.width, t2.height, 1, t2.format, t2.mipmapCount > 1)
+                {
+                    name = "TCGCT_" + (int)item + "_" + t2.name,
+                    wrapMode = t2.wrapMode,
+                    filterMode = t2.filterMode,
+                    anisoLevel = t2.anisoLevel,
+                    hideFlags = HideFlags.DontUnloadUnusedAsset,
+                };
+                Graphics.CopyTexture(t2, 0, array, 0);
+                return array;
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pack-array-" + (int)item, $"Could not copy TCG Studio's art for item {(int)item} ({tex.name}): {e.Message}");
+                return null;
+            }
         }
 
         /// <summary>The custom art through TCG Studio's own image cache (same texture it loaded), or null.</summary>
@@ -143,35 +181,68 @@ namespace TCGCardTracker
             return sprite != null ? sprite.texture : null;
         }
 
-        /// <summary>The material's art: its main-flagged texture, else _BaseMap, else _MainTex.</summary>
-        private static Texture? Art(Material? m)
+        /// <summary>
+        /// Harmony postfix on Item.SetPropertyBlock(ref MeshRenderer, ref ushort index): a custom item's block also
+        /// carries its array, which the pack opening animation copies; any other item's block loses one set before.
+        /// </summary>
+        private static void AfterSetPropertyBlock(Item __instance, object[] __args)
         {
-            var prop = MainProperty(m);
-            return prop == null ? null : m!.GetTexture(prop);
+            try
+            {
+                if (!(__args[0] is MeshRenderer r)) return;
+                var block = Apply(r, __instance.GetItemType(), __args[1] is ushort idx ? idx : (ushort)0);
+                if (block != null) ItemBlock?.SetValue(__instance, block);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pack-block", "Could not set a custom pack's art: " + e.Message);
+            }
         }
 
-        private static string? MainProperty(Material? m)
+        /// <summary>Harmony postfix on Item.SetMesh (customers' bags, auto pack openers): same as above, both meshes.</summary>
+        private static void AfterSetMesh(Item __instance, EItemType itemType)
         {
-            if (m == null || m.shader == null) return null;
-            var s = m.shader;
-            for (int i = 0, n = s.GetPropertyCount(); i < n; i++)
-                if (s.GetPropertyType(i) == ShaderPropertyType.Texture && (s.GetPropertyFlags(i) & ShaderPropertyFlags.MainTexture) != 0)
-                    return s.GetPropertyName(i);
-            if (m.HasProperty("_BaseMap")) return "_BaseMap";
-            if (m.HasProperty("_MainTex")) return "_MainTex";
-            return null;
+            try
+            {
+                var block = Apply(__instance.m_Mesh, itemType, null);
+                if (SecondaryRenderer?.GetValue(__instance) is MeshRenderer second) Apply(second, itemType, null);
+                if (block != null) ItemBlock?.SetValue(__instance, block);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("pack-mesh", "Could not set a custom pack's art: " + e.Message);
+            }
         }
 
-        private static void SetMain(Material m, Texture tex)
+        /// <summary>
+        /// Sets (custom item) or clears (anything else we marked) the array override on one renderer.
+        /// <paramref name="index"/> null keeps the renderer's layer number. Returns the block now set, or null if untouched.
+        /// </summary>
+        private static MaterialPropertyBlock? Apply(MeshRenderer? r, EItemType type, ushort? index)
         {
-            var prop = MainProperty(m);
-            if (prop != null) m.SetTexture(prop, tex);
+            if (r == null) return null;
+            bool custom = Arrays.TryGetValue(type, out var array);
+            if (!custom && !Marked.Contains(r)) return null;
+            var old = new MaterialPropertyBlock();
+            r.GetPropertyBlock(old);
+            var block = new MaterialPropertyBlock();
+            block.SetFloat(IndexId, custom ? 0f : index ?? old.GetFloat(IndexId));
+            if (custom)
+            {
+                block.SetTexture(ArrayId, array);
+                Marked.Add(r);
+            }
+            else Marked.Remove(r);
+            r.SetPropertyBlock(block);
+            return block;
         }
 
-        /// <summary>Logs an item's materials: shader and every texture slot.</summary>
+        /// <summary>Logs an item's materials: shader, every texture and its layer number.</summary>
         private static void Describe(string label, ItemMeshData md)
         {
             var parts = new List<string> { $"mesh={(md.mesh != null ? md.mesh.name : "none")}" };
+            parts.Add("textureIndex=" + TextureIndex?.GetValue(md));
+            parts.Add("arrayMaterialType=" + AccessTools.Field(typeof(ItemMeshData), "arrayMaterialType")?.GetValue(md));
             void Add(string what, Material? m) { if (m != null) parts.Add(what + "=" + Materials(m)); }
             Add("material", md.material);
             Add("materialSecondary", md.materialSecondary);
@@ -185,26 +256,8 @@ namespace TCGCardTracker
             var slots = m.GetTexturePropertyNames()
                 .Select(p => (p, t: m.GetTexture(p)))
                 .Where(x => x.t != null)
-                .Select(x => $"{x.p}={x.t.name} {x.t.width}x{x.t.height}");
-            return $"{m.name} shader={(m.shader != null ? m.shader.name : "none")} main={MainProperty(m) ?? "none"} [{string.Join(", ", slots)}]";
-        }
-
-        /// <summary>Harmony postfix on Item.SetMesh: logs what the first custom pack/box on screen actually draws.</summary>
-        private static void AfterSetMesh(Item __instance, EItemType itemType)
-        {
-            try
-            {
-                if ((int)itemType < (int)EItemType.Max || Logged.Contains(itemType) || Logged.Count >= 2) return;
-                var r = __instance.m_Mesh;
-                if (r == null) return;
-                Logged.Add(itemType);
-                Plugin.Log.LogInfo($"Custom item {(int)itemType} on screen: renderer={r.GetType().Name} materials=[" +
-                                   string.Join(" | ", r.sharedMaterials.Where(m => m != null).Select(Materials)) + "]");
-            }
-            catch (Exception e)
-            {
-                Plugin.LogOnce("pack-skin-log", "Could not describe a custom item: " + e.Message);
-            }
+                .Select(x => $"{x.p}={x.t.name} {x.t.width}x{x.t.height}" + (x.t is Texture2DArray a ? $"x{a.depth}" : ""));
+            return $"{m.name} shader={(m.shader != null ? m.shader.name : "none")} [{string.Join(", ", slots)}]";
         }
     }
 }
