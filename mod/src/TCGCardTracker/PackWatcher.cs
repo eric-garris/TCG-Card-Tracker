@@ -29,6 +29,7 @@ namespace TCGCardTracker
         private static bool _sawScreen;
         private static float _closedAt = -1f;
         private static float _shelvesRefreshedAt = float.NegativeInfinity;
+        private static bool _screenReadable = true;
 
         public static void Install()
         {
@@ -43,6 +44,7 @@ namespace TCGCardTracker
                 return;
             }
             Patch(harmony, typeof(CardOpeningSequence), "GetPackContent", typeof(PackWatcher), nameof(BeforeRoll), prefix: true, "the new-card popup", "pack opening");
+            OpenerWatcher.Install(harmony);
         }
 
         internal static void Patch(Harmony harmony, Type type, string method, Type owner, string handler, bool prefix, string feature, string what)
@@ -73,6 +75,7 @@ namespace TCGCardTracker
             _sequence = null;
             _shelvesRefreshedAt = float.NegativeInfinity;
             Toast.Clear();
+            OpenerWatcher.Reset();
         }
 
         /// <summary>Harmony prefix. Never skips the game's code, and never lets an error reach it.</summary>
@@ -96,7 +99,10 @@ namespace TCGCardTracker
         }
 
         /// <summary>What you own now, refreshing the shelves from the shop at most once a minute.</summary>
-        internal static int[] Snapshot(out Catalog catalog)
+        internal static int[] Snapshot(out Catalog catalog) => Snapshot(out catalog, null);
+
+        /// <summary>As Snapshot, leaving out the cards in one place (e.g. still inside an auto pack opener).</summary>
+        internal static int[] Snapshot(out Catalog catalog, Loc? without)
         {
             catalog = _catalog ??= GameReader.BuildCatalog();
             if (Plugin.LiveShelves.Value && Time.realtimeSinceStartup - _shelvesRefreshedAt >= ShelfRefreshEvery)
@@ -104,13 +110,14 @@ namespace TCGCardTracker
                 GameReader.RefreshShelfData();
                 _shelvesRefreshedAt = Time.realtimeSinceStartup;
             }
-            return Owned(_catalog);
+            return Owned(_catalog, without);
         }
 
         /// <summary>Called every frame: once the opening screen has closed, compares and shows the toast.</summary>
         public static void Tick()
         {
             Toast.Tick();
+            OpenerWatcher.Tick();
             if (_before == null || _catalog == null) return;
             try
             {
@@ -122,7 +129,19 @@ namespace TCGCardTracker
                     _closedAt = -1f;
                     return;
                 }
-                if (!_sawScreen && now - _rolledAt < WaitForScreen) return;
+                if (!_sawScreen)
+                {
+                    if (now - _rolledAt < WaitForScreen) return;
+                    // Rolled with no opening screen: an auto pack opener, whose cards are shown when you collect
+                    // them (OpenerWatcher). Comparing here would only pick up whatever else came in meanwhile,
+                    // e.g. a trade. Only if the screen can't be read at all is the comparison made anyway.
+                    if (_screenReadable)
+                    {
+                        _before = null;
+                        _sequence = null;
+                        return;
+                    }
+                }
                 if (_closedAt < 0f) _closedAt = now;
                 if (now - _closedAt < SettleAfterClose) return;
 
@@ -144,12 +163,12 @@ namespace TCGCardTracker
         }
 
         /// <summary>Shows the toast for what was added since <paramref name="before"/> (a Snapshot), e.g. a mod's card reward.</summary>
-        internal static void ShowGainsSince(int[] before, string what)
+        internal static void ShowGainsSince(int[] before, string what, Loc? without = null)
         {
             try
             {
                 if (_catalog == null || !GameReader.IsReady()) return;
-                var gains = CardQueries.Gains(_catalog, before, Owned(_catalog));
+                var gains = CardQueries.Gains(_catalog, before, Owned(_catalog, without));
                 if (gains.Count == 0) return;
                 Plugin.Log.LogInfo($"{what}: {gains.Count} new for your collection.");
                 if (Plugin.NewCardPopup.Value) Toast.Show(gains);
@@ -160,7 +179,12 @@ namespace TCGCardTracker
             }
         }
 
-        private static int[] Owned(Catalog catalog) => GameReader.Read(catalog).Combine(Plugin.IncludedLocations());
+        private static int[] Owned(Catalog catalog, Loc? without = null)
+        {
+            var included = Plugin.IncludedLocations();
+            if (without.HasValue) included[(int)without.Value] = false;
+            return GameReader.Read(catalog).Combine(included);
+        }
 
         /// <summary>Kept separate so a game version without IsActive fails here, not in Tick.</summary>
         [MethodImpl(MethodImplOptions.NoInlining)]
@@ -172,6 +196,7 @@ namespace TCGCardTracker
             }
             catch
             {
+                _screenReadable = false;
                 return false;
             }
         }
