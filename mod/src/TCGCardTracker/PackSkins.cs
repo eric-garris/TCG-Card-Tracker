@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
@@ -104,8 +105,8 @@ namespace TCGCardTracker
                     var t = Traverse.Create(pack);
                     var def = t.Field("Def");
                     var setDef = t.Field("Set").Field("Def").GetValue();
-                    if (Fix(meshes, vPack, (EItemType)t.Field("PackItem").GetValue(), setDef, def.Field("PackTexture").GetValue() as string)) packs++;
-                    if (Fix(meshes, vBox, (EItemType)t.Field("BoxItem").GetValue(), setDef, def.Field("BoxTexture").GetValue() as string)) boxes++;
+                    if (Fix(meshes, vPack, false, (EItemType)t.Field("PackItem").GetValue(), setDef, def.Field("PackTexture").GetValue() as string)) packs++;
+                    if (Fix(meshes, vBox, true, (EItemType)t.Field("BoxItem").GetValue(), setDef, def.Field("BoxTexture").GetValue() as string)) boxes++;
                 }
                 Plugin.Log.LogInfo($"TCG Studio pack and box art: {packs} pack(s) and {boxes} box(es) now draw their own art.");
             }
@@ -116,15 +117,13 @@ namespace TCGCardTracker
         }
 
         /// <summary>Gives one custom item a one-layer array of its art. False when it has no art or the copy fails.</summary>
-        private static bool Fix(List<ItemMeshData> meshes, ItemMeshData vanilla, EItemType item, object? setDef, string? file)
+        private static bool Fix(List<ItemMeshData> meshes, ItemMeshData vanilla, bool box, EItemType item, object? setDef, string? file)
         {
             int i = (int)item;
             if (item == EItemType.None || i < 0 || i >= meshes.Count || string.IsNullOrEmpty(file) || setDef == null) return false;
             var shared = vanilla.material;
             if (shared == null || !shared.HasProperty(ArrayId)) return false; // not an array material: nothing to fix
-            var tex = Load(setDef, file!);
-            if (tex == null) return false;
-            var array = ToArray(tex, item);
+            var array = box ? BoxArray(vanilla, Resolve(setDef, file!), item) : ToArray(Load(setDef, file!), item);
             if (array == null) return false;
 
             var md = meshes[i];
@@ -149,8 +148,9 @@ namespace TCGCardTracker
         }
 
         /// <summary>A one-layer Texture2DArray holding <paramref name="tex"/> (all mip levels), or null.</summary>
-        private static Texture? ToArray(Texture tex, EItemType item)
+        private static Texture? ToArray(Texture? tex, EItemType item)
         {
+            if (tex == null) return null;
             try
             {
                 if (!(tex is Texture2D t2)) return null;
@@ -172,10 +172,132 @@ namespace TCGCardTracker
             }
         }
 
+        /// <summary>The absolute path of a set's file, through TCG Studio's SetDef.Resolve, or null.</summary>
+        private static string? Resolve(object setDef, string file) =>
+            AccessTools.Method(setDef.GetType(), "Resolve")?.Invoke(setDef, new object[] { file }) as string;
+
+        // Card box faces as x, y, width, height fractions of the texture, top-left origin.
+        // TCG Studio paints boxes on the classic box atlas (Studio's uvmap/models.go, 1024 px: front & back 202-561 x 153-374,
+        // top & bottom 201-510 x 14-143, sides 11-171 x 18-266, all upright). Game 1.03 gives each box its own layer laid
+        // out as a cross around the lid (measured from the vanilla basic box layer, 1024 px): lid 306-716 x 269-527,
+        // front below it (527-790), back above it (0-269, upside down), sides left (31-306) and right (716-990) with
+        // their tops toward the lid; the box's underside (below the front) keeps the vanilla look.
+        private static readonly Rect StudioFront = Px(202, 153, 561, 374), StudioTop = Px(201, 14, 510, 143), StudioSide = Px(11, 18, 171, 266);
+        private static readonly (Rect dest, Rect src, int turns)[] BoxFaces =
+        {
+            (Px(306, 269, 716, 527), StudioTop, 0),
+            (Px(306, 527, 716, 790), StudioFront, 0),
+            (Px(306, 0, 716, 269), StudioFront, 2),
+            (Px(31, 269, 306, 527), StudioSide, 1),   // turned a quarter clockwise: the side's top faces right
+            (Px(716, 269, 990, 527), StudioSide, 3),  // a quarter anticlockwise
+        };
+
+        private static Rect Px(float x0, float y0, float x1, float y1) => new Rect(x0 / 1024f, y0 / 1024f, (x1 - x0) / 1024f, (y1 - y0) / 1024f);
+
+        private static Color32[]? _boxBase;
+        private static int _boxW, _boxH;
+
+        /// <summary>
+        /// A one-layer array for a custom card box: the vanilla basic box layer with TCG Studio's faces redrawn on the
+        /// 1.03 layout. TCG Studio's picture is read from its file (its own copy is GPU-only); null if anything fails.
+        /// </summary>
+        private static Texture? BoxArray(ItemMeshData vanilla, string? path, EItemType item)
+        {
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
+            Texture2D? src = null, outTex = null;
+            try
+            {
+                if (_boxBase == null)
+                {
+                    if (!(vanilla.material.GetTexture(ArrayId) is Texture2DArray va)) return null;
+                    int layer = Convert.ToInt32(TextureIndex!.GetValue(vanilla));
+                    _boxW = va.width; _boxH = va.height;
+                    var rt = RenderTexture.GetTemporary(_boxW, _boxH, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                    var prev = RenderTexture.active;
+                    Graphics.Blit(va, rt, layer, 0);
+                    RenderTexture.active = rt;
+                    var read = new Texture2D(_boxW, _boxH, TextureFormat.RGBA32, false);
+                    read.ReadPixels(new Rect(0, 0, _boxW, _boxH), 0, 0);
+                    RenderTexture.active = prev;
+                    RenderTexture.ReleaseTemporary(rt);
+                    _boxBase = read.GetPixels32();
+                    UnityEngine.Object.Destroy(read);
+                }
+
+                src = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!src.LoadImage(File.ReadAllBytes(path))) return null;
+                var sp = src.GetPixels32();
+                int sw = src.width, sh = src.height, w = _boxW, h = _boxH;
+                var px = (Color32[])_boxBase.Clone();
+                foreach (var (dest, srcRect, turns) in BoxFaces)
+                {
+                    // Pixel bounds of the face, one pixel wider on each side so no vanilla seam shows.
+                    int x0 = Math.Max(0, (int)(dest.xMin * w) - 1), x1 = Math.Min(w, (int)Math.Ceiling(dest.xMax * w) + 1);
+                    int y0 = Math.Max(0, (int)(dest.yMin * h) - 1), y1 = Math.Min(h, (int)Math.Ceiling(dest.yMax * h) + 1);
+                    for (int y = y0; y < y1; y++)
+                    {
+                        float v = Mathf.Clamp01((y + 0.5f - dest.yMin * h) / (dest.height * h));
+                        for (int x = x0; x < x1; x++)
+                        {
+                            float u = Mathf.Clamp01((x + 0.5f - dest.xMin * w) / (dest.width * w));
+                            // (a, b): where this pixel lies on the upright face, top-left origin.
+                            float a, b;
+                            switch (turns)
+                            {
+                                case 1: a = v; b = 1f - u; break;
+                                case 2: a = 1f - u; b = 1f - v; break;
+                                case 3: a = 1f - v; b = u; break;
+                                default: a = u; b = v; break;
+                            }
+                            float sx = (srcRect.xMin + a * srcRect.width) * sw - 0.5f;
+                            float sy = (srcRect.yMin + b * srcRect.height) * sh - 0.5f;
+                            px[(h - 1 - y) * w + x] = Sample(sp, sw, sh, sx, sy);
+                        }
+                    }
+                }
+
+                outTex = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = "TCGCT_box_" + (int)item };
+                outTex.SetPixels32(px);
+                outTex.Apply(updateMipmaps: true, makeNoLongerReadable: false);
+                var array = new Texture2DArray(w, h, 1, TextureFormat.RGBA32, true)
+                {
+                    name = "TCGCT_" + (int)item + "_box",
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Trilinear,
+                    anisoLevel = 4,
+                    hideFlags = HideFlags.DontUnloadUnusedAsset,
+                };
+                Graphics.CopyTexture(outTex, 0, array, 0);
+                return array;
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("box-array-" + (int)item, $"Could not lay out TCG Studio's box art for item {(int)item} ({path}): {e.Message}");
+                return null;
+            }
+            finally
+            {
+                if (src != null) UnityEngine.Object.Destroy(src);
+                if (outTex != null) UnityEngine.Object.Destroy(outTex);
+            }
+        }
+
+        /// <summary>Bilinear sample of a bottom-up pixel array at (x, y) in top-left pixel coordinates.</summary>
+        private static Color32 Sample(Color32[] p, int w, int h, float x, float y)
+        {
+            x = Mathf.Clamp(x, 0, w - 1); y = Mathf.Clamp(y, 0, h - 1);
+            int x0 = (int)x, y0 = (int)y, x1 = Math.Min(x0 + 1, w - 1), y1 = Math.Min(y0 + 1, h - 1);
+            float fx = x - x0, fy = y - y0;
+            Color32 At(int xx, int yy) => p[(h - 1 - yy) * w + xx];
+            var top = Color32.Lerp(At(x0, y0), At(x1, y0), fx);
+            var bottom = Color32.Lerp(At(x0, y1), At(x1, y1), fx);
+            return Color32.Lerp(top, bottom, fy);
+        }
+
         /// <summary>The custom art through TCG Studio's own image cache (same texture it loaded), or null.</summary>
         private static Texture? Load(object setDef, string file)
         {
-            var path = AccessTools.Method(setDef.GetType(), "Resolve")?.Invoke(setDef, new object[] { file }) as string;
+            var path = Resolve(setDef, file);
             if (string.IsNullOrEmpty(path)) return null;
             var sprite = AccessTools.Method(AccessTools.TypeByName(ImageCache), "Get", new[] { typeof(string) })?.Invoke(null, new object[] { path! }) as Sprite;
             return sprite != null ? sprite.texture : null;
