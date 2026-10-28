@@ -179,17 +179,18 @@ namespace TCGCardTracker
         // Card box faces as x, y, width, height fractions of the texture, top-left origin.
         // TCG Studio paints boxes on the classic box atlas (Studio's uvmap/models.go, 1024 px: front & back 202-561 x 153-374,
         // top & bottom 201-510 x 14-143, sides 11-171 x 18-266, all upright). Game 1.03 gives each box its own layer laid
-        // out as a cross around the lid (measured from the vanilla basic box layer, 1024 px): lid 306-716 x 269-527,
-        // front below it (527-790), back above it (0-269, upside down), sides left (31-306) and right (716-990) with
-        // their tops toward the lid; the box's underside (below the front) keeps the vanilla look.
+        // out as a cross around the lid, the back upside down and the sides turned with their tops toward the lid; the
+        // box's underside (below the front) keeps the vanilla look. "map" is where the classic face lands in 1.03 (found
+        // by matching the classic basic box art against the vanilla 1.03 layer, 1024 px); "paint" is the area drawn,
+        // up to halfway to the next face, so the art's edge pixels run on past the face edges instead of vanilla.
         private static readonly Rect StudioFront = Px(202, 153, 561, 374), StudioTop = Px(201, 14, 510, 143), StudioSide = Px(11, 18, 171, 266);
-        private static readonly (Rect dest, Rect src, int turns)[] BoxFaces =
+        private static readonly (Rect paint, Rect map, Rect src, int turns)[] BoxFaces =
         {
-            (Px(306, 269, 716, 527), StudioTop, 0),
-            (Px(306, 527, 716, 790), StudioFront, 0),
-            (Px(306, 0, 716, 269), StudioFront, 2),
-            (Px(31, 269, 306, 527), StudioSide, 1),   // turned a quarter clockwise: the side's top faces right
-            (Px(716, 269, 990, 527), StudioSide, 3),  // a quarter anticlockwise
+            (Px(306, 0, 716, 286), Px(324, 27, 682, 276), StudioFront, 2),    // back
+            (Px(306, 512, 716, 785), Px(343, 518, 697, 770), StudioFront, 0), // front
+            (Px(31, 269, 325, 527), Px(83, 298, 309, 503), StudioSide, 1),    // left side, turned a quarter clockwise
+            (Px(700, 269, 990, 527), Px(715, 294, 938, 497), StudioSide, 3),  // right side, a quarter anticlockwise
+            (Px(325, 286, 700, 512), Px(341, 296, 684, 506), StudioTop, 0),   // lid
         };
 
         private static Rect Px(float x0, float y0, float x1, float y1) => new Rect(x0 / 1024f, y0 / 1024f, (x1 - x0) / 1024f, (y1 - y0) / 1024f);
@@ -229,11 +230,10 @@ namespace TCGCardTracker
                 var sp = src.GetPixels32();
                 int sw = src.width, sh = src.height, w = _boxW, h = _boxH;
                 var px = (Color32[])_boxBase.Clone();
-                foreach (var (dest, srcRect, turns) in BoxFaces)
+                foreach (var (paint, dest, srcRect, turns) in BoxFaces)
                 {
-                    // Pixel bounds of the face, one pixel wider on each side so no vanilla seam shows.
-                    int x0 = Math.Max(0, (int)(dest.xMin * w) - 1), x1 = Math.Min(w, (int)Math.Ceiling(dest.xMax * w) + 1);
-                    int y0 = Math.Max(0, (int)(dest.yMin * h) - 1), y1 = Math.Min(h, (int)Math.Ceiling(dest.yMax * h) + 1);
+                    int x0 = (int)(paint.xMin * w), x1 = Math.Min(w, (int)Math.Ceiling(paint.xMax * w));
+                    int y0 = (int)(paint.yMin * h), y1 = Math.Min(h, (int)Math.Ceiling(paint.yMax * h));
                     for (int y = y0; y < y1; y++)
                     {
                         float v = Mathf.Clamp01((y + 0.5f - dest.yMin * h) / (dest.height * h));
