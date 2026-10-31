@@ -83,7 +83,10 @@ Press **F7** in your shop to open it.
 - **TCG Studio pack and box art on game 1.03+:** the game's Unity 6 build draws all booster packs and boxes from
   one stacked texture (a texture array), each pack picking its layer, and TCG Studio's art never reaches it, so custom
   packs and boxes looked vanilla. The tracker gives each custom pack and box its own one-layer array of TCG Studio's art,
-  on the shelf, in hand, in bags and boxes and while opening. Turn it off with `[TCG Studio] FixPackSkins`.
+  on the shelf, in hand, in bags and boxes and while opening; box art is also moved from TCG Studio's old box layout to
+  the 1.03 box's. **This is a temporary workaround** for TCG Studio 1.14.0 and earlier on game 1.03: when a TCG Studio
+  update supports the new game version, turn it off with `[TCG Studio] FixPackSkins` (or in the F7 Settings tab) and,
+  if TCG Studio's own art then shows correctly, it can be removed from the tracker.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening, collecting from pack openers and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off

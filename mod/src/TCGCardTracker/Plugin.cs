@@ -96,7 +96,8 @@ namespace TCGCardTracker
             FixPackSkins = Config.Bind("TCG Studio", "FixPackSkins", true,
                 "With TCG Studio installed: show its custom booster pack and box art on the 3D packs and boxes. Since game 1.03 " +
                 "(Unity 6) the game draws all packs from one stacked texture (a texture array), and TCG Studio's art doesn't reach " +
-                "it, so custom packs looked vanilla. Turn off if TCG Studio fixes this itself. Also logs how the game draws the " +
+                "it, so custom packs looked vanilla. A temporary workaround until TCG Studio supports game 1.03: turn it off once " +
+                "a TCG Studio update shows its packs and boxes correctly by itself. Also logs how the game draws the " +
                 "vanilla pack and box. Takes effect after a restart.");
             PointAndSlotsSets = Config.Bind("Point And Slots", "CustomSets", true,
                 "With TCG Studio and the Point And Slots mod installed: put TCG Studio's sets in Point And Slots' point shop and " +

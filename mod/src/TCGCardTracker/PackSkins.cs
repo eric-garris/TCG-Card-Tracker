@@ -23,6 +23,14 @@ namespace TCGCardTracker
     /// - gives its ItemMeshData a material that draws that array, at layer 0 (shelves, hands, customers, boxes);
     /// - adds the array to the item's property block (the pack opening animation draws the shared vanilla
     ///   material with the item's block), and clears it again when a pooled item becomes something else.
+    /// Card boxes also get their faces moved from TCG Studio's classic four-box atlas onto the 1.03 box layout
+    /// (see BoxFaces).
+    ///
+    /// WORKAROUND (added 2026-10-31, tracker 0.15.0, TCG Studio 1.14.0, game 1.03): this only exists because TCG Studio
+    /// doesn't support the 1.03 texture arrays yet. Once a TCG Studio release draws its packs and boxes correctly on
+    /// 1.03 by itself, delete this file, its Install() call in Plugin.Awake, the [TCG Studio] FixPackSkins setting
+    /// (Plugin.cs, TrackerWindow.Settings.cs) and its README entry. Until then FixPackSkins = false turns it off, which
+    /// is also the way to check whether a new TCG Studio still needs it.
     /// </summary>
     internal static class PackSkins
     {
