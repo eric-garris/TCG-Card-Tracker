@@ -70,6 +70,10 @@ namespace TCGCardTracker
                     new Setting(Plugin.CustomTradeChance, "TCG Studio trade chance", min: 0f, max: 1f, step: 0.05f),
                     new Setting(Plugin.CustomRequestChance, "TCG Studio ask chance", min: 0f, max: 1f, step: 0.05f),
                 }),
+                ("TCG Studio", new[]
+                {
+                    new Setting(Plugin.FixPackSkins, "Fix pack and box art", startup: true),
+                }),
                 ("Point And Slots", new[]
                 {
                     new Setting(Plugin.PointAndSlotsSets, "TCG Studio sets", startup: true),
