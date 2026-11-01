@@ -26,8 +26,8 @@ namespace TCGCardTracker
     /// and that is empty in the picture, the copy goes on the label material, and the new cells go into the map, so
     /// the game's own SetItemImage finds them. Packs get cells first, then boxes; a box left without a cell shows its
     /// set's pack icon. If no grid matches, custom packs and boxes show the basic pack and box icon instead of nothing.
-    /// The material, the grid found and a small copy of the atlas (BepInEx\TCGCardTracker-dump\PriceTagAtlas.png) are
-    /// written once for checking.
+    /// The material, the grid found and small copies of the atlas before and after (BepInEx\TCGCardTracker-dump\
+    /// PriceTagAtlas.png and PriceTagAtlas-custom.png) are written once for checking.
     ///
     /// WORKAROUND (added 2026-11-01, tracker 0.15.2, TCG Studio 1.14.0, game 1.03), part of the FixPackSkins workaround
     /// (see PackSkins): delete this file and its Install() call in Plugin.Awake once a TCG Studio release shows its
@@ -155,7 +155,7 @@ namespace TCGCardTracker
             if (Copies.TryGetValue(src, out var done)) { material.mainTexture = done; return; }
 
             var atlas = ReadBack(src, new Rect(0, 0, 1, 1), Probe, Probe);
-            Dump(atlas);
+            Dump(atlas, "PriceTagAtlas.png");
             int size = material.HasProperty(GridSizeId) ? Mathf.RoundToInt(material.GetFloat(GridSizeId)) : 0;
             var grid = FindGrid(map, atlas, size);
             if (grid == null)
@@ -182,6 +182,7 @@ namespace TCGCardTracker
             if (copy == null) { _cells.Clear(); return; }
             Copies[src] = copy;
             material.mainTexture = copy;
+            Dump(ReadBack(copy, new Rect(0, 0, 1, 1), Probe, Probe), "PriceTagAtlas-custom.png");
         }
 
         /// <summary>The atlas as a render texture with each placed custom icon copied into its cell. Null if that fails.</summary>
@@ -332,8 +333,8 @@ namespace TCGCardTracker
             }
         }
 
-        /// <summary>Saves the probe copy of the atlas as BepInEx\TCGCardTracker-dump\PriceTagAtlas.png, for checking.</summary>
-        private static void Dump(Color32[] atlas)
+        /// <summary>Saves a probe-size copy of the atlas in BepInEx\TCGCardTracker-dump, for checking.</summary>
+        private static void Dump(Color32[] atlas, string file)
         {
             try
             {
@@ -342,7 +343,7 @@ namespace TCGCardTracker
                 var t = new Texture2D(Probe, Probe, TextureFormat.RGBA32, false);
                 t.SetPixels32(atlas);
                 t.Apply(false);
-                var path = Path.Combine(dir, "PriceTagAtlas.png");
+                var path = Path.Combine(dir, file);
                 File.WriteAllBytes(path, ImageConversion.EncodeToPNG(t));
                 UnityEngine.Object.Destroy(t);
                 Plugin.Log.LogInfo("TCG Studio label icons: saved a copy of the label atlas to " + path);
