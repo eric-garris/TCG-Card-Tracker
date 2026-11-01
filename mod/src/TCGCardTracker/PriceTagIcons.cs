@@ -20,9 +20,9 @@ namespace TCGCardTracker
     /// (itemTypeValues / itemCellIndices). TCG Studio's items are new item types the map has never heard of, so the
     /// cell is -1 and the label shows no icon at all.
     ///
-    /// The atlas grid isn't stored anywhere the game exposes, so it is found by matching: the atlas and a few vanilla
-    /// item icons are read back small, and every grid size and row order is tried until the cells the map names look
-    /// like those icons. Then a copy of the atlas gets each TCG Studio icon painted into a cell that no map entry uses
+    /// The grid size comes from the shader's _AtlasGridSize (16 on 1.03); the row order (and, without that property,
+    /// the size too) is found by matching: the atlas and a few vanilla item icons are read back small, and the cells
+    /// the map names are compared with those icons under each candidate grid. Then a copy of the atlas gets each TCG Studio icon painted into a cell that no map entry uses
     /// and that is empty in the picture, the copy goes on the label material, and the new cells go into the map, so
     /// the game's own SetItemImage finds them. Packs get cells first, then boxes; a box left without a cell shows its
     /// set's pack icon. If no grid matches, custom packs and boxes show the basic pack and box icon instead of nothing.
@@ -40,6 +40,8 @@ namespace TCGCardTracker
         private const int Probe = 1024;
         /// <summary>Samples per cell side when comparing a cell with an icon.</summary>
         private const int Grain = 16;
+        /// <summary>Shader property with the atlas' cells per side (16 on game 1.03).</summary>
+        private static readonly int GridSizeId = Shader.PropertyToID("_AtlasGridSize");
 
         private static Type? _tagType, _mapType;
         private static Func<EItemType, bool>? _isCustom, _isPack, _isBox;
@@ -154,7 +156,8 @@ namespace TCGCardTracker
 
             var atlas = ReadBack(src, new Rect(0, 0, 1, 1), Probe, Probe);
             Dump(atlas);
-            var grid = FindGrid(map, atlas);
+            int size = material.HasProperty(GridSizeId) ? Mathf.RoundToInt(material.GetFloat(GridSizeId)) : 0;
+            var grid = FindGrid(map, atlas, size);
             if (grid == null)
             {
                 Plugin.Log.LogInfo("TCG Studio label icons: could not work out the label atlas grid; custom packs and boxes get the basic pack and box icons.");
@@ -220,9 +223,10 @@ namespace TCGCardTracker
 
         /// <summary>
         /// Grid (columns, rows, whether cell 0 is at the top) under which the map's vanilla item cells best match those
-        /// items' icon sprites, or null if none matches well.
+        /// items' icon sprites, or null if none matches well. With the shader's grid size known (<paramref name="size"/>
+        /// above 1) only the row order is matched.
         /// </summary>
-        private static (int cols, int rows, bool top)? FindGrid(UnityEngine.Object map, Color32[] atlas)
+        private static (int cols, int rows, bool top)? FindGrid(UnityEngine.Object map, Color32[] atlas, int size)
         {
             var values = _itemValues!.GetValue(map) as int[] ?? new int[0];
             var cells = _itemCells!.GetValue(map) as int[] ?? new int[0];
@@ -238,8 +242,9 @@ namespace TCGCardTracker
             int need = refs.Max(r => r.cell) + 1;
 
             var results = new List<(double err, int cols, int rows, bool top)>();
-            for (int cols = 2; cols <= 64; cols++)
-                for (int rows = 2; rows <= 64; rows++)
+            int lo = size > 1 ? size : 2, hi = size > 1 ? size : 64;
+            for (int cols = lo; cols <= hi; cols++)
+                for (int rows = lo; rows <= hi; rows++)
                 {
                     if (cols * rows < need) continue;
                     foreach (bool top in new[] { true, false })
@@ -254,8 +259,14 @@ namespace TCGCardTracker
                                string.Join("; ", results.Take(5).Select(r => $"{r.err:F4} {r.cols}x{r.rows} {(r.top ? "top" : "bottom")}")) +
                                $" (median {results[results.Count / 2].err:F4}, {refs.Count} reference icon(s)).");
             var best = results[0];
-            // A real match is close to the icons and clearly better than the typical wrong grid.
-            if (best.err > 0.03 || best.err > results[results.Count / 2].err * 0.4) return null;
+            // The atlas cells hold the icons with their edges bled outward, so even the right cell differs from the
+            // sprite (about 0.18 on 1.03, wrong grids 0.22 and up, median 0.39). Known size: the better row order wins.
+            if (size <= 1 && best.err > results[results.Count / 2].err * 0.6) return null;
+            if (size > 1 && results.Count == 2 && results[1].err - best.err < 0.02)
+            {
+                Plugin.Log.LogInfo("TCG Studio label icons: could not tell which way the atlas rows run.");
+                return null;
+            }
             return (best.cols, best.rows, best.top);
         }
 
