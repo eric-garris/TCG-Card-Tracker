@@ -87,6 +87,10 @@ Press **F7** in your shop to open it.
   the 1.03 box's. **This is a temporary workaround** for TCG Studio 1.14.0 and earlier on game 1.03: when a TCG Studio
   update supports the new game version, turn it off with `[TCG Studio] FixPackSkins` (or in the F7 Settings tab) and,
   if TCG Studio's own art then shows correctly, it can be removed from the tracker.
+- **Day clock with TCG Studio on game 1.03+:** TCG Studio 1.14.0's shop sign code crashes on the game's Unity 6
+  build, and because it runs while the shop's lighting and clock object starts up, the game switched that object off:
+  no clock, and the day never ends. The tracker catches that error (noted once in the BepInEx log), so the clock runs;
+  the shop sign stays vanilla. **This is a temporary workaround** until TCG Studio supports game 1.03.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening, collecting from pack openers and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
