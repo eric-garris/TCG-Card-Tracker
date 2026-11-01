@@ -87,6 +87,9 @@ Press **F7** in your shop to open it.
   the 1.03 box's. **This is a temporary workaround** for TCG Studio 1.14.0 and earlier on game 1.03: when a TCG Studio
   update supports the new game version, turn it off with `[TCG Studio] FixPackSkins` (or in the F7 Settings tab) and,
   if TCG Studio's own art then shows correctly, it can be removed from the tracker.
+- **TCG Studio label icons on game 1.03+:** since 1.03 the labels on shelves and delivery boxes draw their item icon
+  from one prebaked icon atlas, which only knows vanilla items, so TCG Studio's packs and boxes showed no icon. The
+  tracker adds each custom item's icon to a copy of that atlas (also under `FixPackSkins`, same temporary workaround).
 - **Day clock with TCG Studio on game 1.03+:** TCG Studio 1.14.0's shop sign code crashes on the game's Unity 6
   build, and because it runs while the shop's lighting and clock object starts up, the game switched that object off:
   no clock, and the day never ends. The tracker catches that error (noted once in the BepInEx log), so the clock runs;
@@ -99,7 +102,7 @@ Press **F7** in your shop to open it.
   from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
   custom sets to that mod's card list and, once per new rarity name, to its rarity settings. With TCG Marketplace
   installed, it changes how fast that mod's listings sell. With TCG Studio installed, it changes which picture its
-  custom packs and boxes draw (`FixPackSkins`).
+  custom packs and boxes draw, and their label icons (`FixPackSkins`).
 
 ## Install
 

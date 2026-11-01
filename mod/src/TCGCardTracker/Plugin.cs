@@ -19,7 +19,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.15.1";
+        public const string Version = "0.15.2";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -96,8 +96,10 @@ namespace TCGCardTracker
             FixPackSkins = Config.Bind("TCG Studio", "FixPackSkins", true,
                 "With TCG Studio installed: show its custom booster pack and box art on the 3D packs and boxes. Since game 1.03 " +
                 "(Unity 6) the game draws all packs from one stacked texture (a texture array), and TCG Studio's art doesn't reach " +
-                "it, so custom packs looked vanilla. A temporary workaround until TCG Studio supports game 1.03: turn it off once " +
-                "a TCG Studio update shows its packs and boxes correctly by itself. Also logs how the game draws the " +
+                "it, so custom packs looked vanilla. The same goes for the icons on shelf and delivery box labels (since 1.03 drawn " +
+                "from one icon atlas that has no TCG Studio items), so this also adds TCG Studio's pack and box icons there. " +
+                "A temporary workaround until TCG Studio supports game 1.03: turn it off once " +
+                "a TCG Studio update shows its packs, boxes and label icons correctly by itself. Also logs how the game draws the " +
                 "vanilla pack and box. Takes effect after a restart.");
             PointAndSlotsSets = Config.Bind("Point And Slots", "CustomSets", true,
                 "With TCG Studio and the Point And Slots mod installed: put TCG Studio's sets in Point And Slots' point shop and " +
@@ -158,6 +160,7 @@ namespace TCGCardTracker
             if (TradeBanners.Value) TradeBanner.Install();
             CustomTrades.Install();
             PackSkins.Install();
+            PriceTagIcons.Install();
             ShopSignGuard.Install();
             PointAndSlots.Install();
             Marketplace.Install();
