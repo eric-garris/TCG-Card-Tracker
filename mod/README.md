@@ -95,6 +95,10 @@ Press **F7** in your shop to open it.
   build, and because it runs while the shop's lighting and clock object starts up, the game switched that object off:
   no clock, and the day never ends. The tracker catches that error (noted once in the BepInEx log), so the clock runs;
   the shop sign stays vanilla. **This is a temporary workaround** until TCG Studio supports game 1.03.
+- **TCG Studio packs with more than 7 cards on game 1.03+:** 1.03 keeps one size per card slot for vanilla's 7
+  slots only, so opening a bigger TCG Studio pack (imported Yu-Gi-Oh and Pokemon sets have 9 or more cards) hit an
+  error on every frame and the opening screen froze. The tracker gives the extra slots a size too, so these packs
+  open normally. **This is a temporary workaround** until TCG Studio supports game 1.03.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening, collecting from pack openers and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
