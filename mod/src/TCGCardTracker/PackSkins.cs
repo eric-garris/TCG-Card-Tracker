@@ -129,7 +129,7 @@ namespace TCGCardTracker
         /// <summary>
         /// Same for TCG Studio's accessories (sleeves, playmats, comics, collection books, figurines, ...): each one whose
         /// base item draws from a texture array gets a one-layer array of its own texture. Accessories with their own
-        /// model (figurines) use the whole texture, so they need nothing else; the base models keep the UV layout the
+        /// model (figurines) already show their texture, so they are left alone; the base models keep the UV layout the
         /// game gives them, which TCG Studio's templates may not match on 1.03 (logged, and the vanilla layer saved to
         /// BepInEx\TCGCardTracker-dump, so a different layout can be spotted).
         /// </summary>
@@ -163,6 +163,12 @@ namespace TCGCardTracker
                     var md = meshes[(int)item];
                     Describe($"TCG Studio accessory \"{label}\" (base {baseItem}{(string.IsNullOrEmpty(meshFile) ? "" : ", own model " + (md.mesh != null ? md.mesh.name : "none"))})", md);
 
+                    if (!string.IsNullOrEmpty(meshFile) && md.mesh != null && md.mesh != vanilla.mesh)
+                    {
+                        // Figurines and other own models already show their texture on 1.03 (Eric, 2026-11-04).
+                        Plugin.Log.LogInfo($"TCG Studio accessory \"{label}\": own model, left to TCG Studio.");
+                        continue;
+                    }
                     var shared = vanilla.material;
                     if (shared == null || !shared.HasProperty(ArrayId) || !(shared.GetTexture(ArrayId) is Texture2DArray))
                     {
