@@ -84,7 +84,9 @@ Press **F7** in your shop to open it.
   one stacked texture (a texture array), each pack picking its layer, and TCG Studio's art never reaches it, so custom
   packs and boxes looked vanilla. The tracker gives each custom pack and box its own one-layer array of TCG Studio's art,
   on the shelf, in hand, in bags and boxes and while opening; box art is also moved from TCG Studio's old box layout to
-  the 1.03 box's. **This is a temporary workaround** for TCG Studio 1.14.0 and earlier on game 1.03: when a TCG Studio
+  the 1.03 box's. TCG Studio's accessories (sleeves, playmats, comics, collection books, figurines and the rest) get
+  the same treatment: each one whose base item draws from a texture array gets its own one-layer array of its texture.
+  **This is a temporary workaround** for TCG Studio 1.14.0 and earlier on game 1.03: when a TCG Studio
   update supports the new game version, turn it off with `[TCG Studio] FixPackSkins` (or in the F7 Settings tab) and,
   if TCG Studio's own art then shows correctly, it can be removed from the tracker.
 - **TCG Studio label icons on game 1.03+:** since 1.03 the labels on shelves and delivery boxes draw their item icon
@@ -107,7 +109,7 @@ Press **F7** in your shop to open it.
   from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
   custom sets to that mod's card list and, once per new rarity name, to its rarity settings. With TCG Marketplace
   installed, it changes how fast that mod's listings sell. With TCG Studio installed, it changes which picture its
-  custom packs and boxes draw, and their label icons (`FixPackSkins`).
+  custom packs, boxes and accessories draw, and their label icons (`FixPackSkins`).
 
 ## Install
 

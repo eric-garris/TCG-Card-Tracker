@@ -37,6 +37,7 @@ namespace TCGCardTracker
         private const string Injector = "TCGCustomCards.Runtime.ItemInjector";
         private const string Registry = "TCGCustomCards.Runtime.Registry";
         private const string ImageCache = "TCGCustomCards.Runtime.ImageCache";
+        private const string StudioPaths = "TCGCustomCards.Core.StudioPaths";
 
         private static readonly int ArrayId = Shader.PropertyToID("_MainTexArray");
         private static readonly int IndexId = Shader.PropertyToID("_TexIndex");
@@ -122,23 +123,86 @@ namespace TCGCardTracker
             {
                 Plugin.Log.LogWarning("Could not fix TCG Studio's pack art: " + e);
             }
+            FixAccessories();
         }
 
-        /// <summary>Gives one custom item a one-layer array of its art. False when it has no art or the copy fails.</summary>
-        private static bool Fix(List<ItemMeshData> meshes, ItemMeshData vanilla, bool box, EItemType item, object? setDef, string? file)
+        /// <summary>
+        /// Same for TCG Studio's accessories (sleeves, playmats, comics, collection books, figurines, ...): each one whose
+        /// base item draws from a texture array gets a one-layer array of its own texture. Accessories with their own
+        /// model (figurines) use the whole texture, so they need nothing else; the base models keep the UV layout the
+        /// game gives them, which TCG Studio's templates may not match on 1.03 (logged, and the vanilla layer saved to
+        /// BepInEx\TCGCardTracker-dump, so a different layout can be spotted).
+        /// </summary>
+        private static void FixAccessories()
         {
-            int i = (int)item;
-            if (item == EItemType.None || i < 0 || i >= meshes.Count || string.IsNullOrEmpty(file) || setDef == null) return false;
-            var shared = vanilla.material;
-            if (shared == null || !shared.HasProperty(ArrayId)) return false; // not an array material: nothing to fix
-            var array = box ? BoxArray(vanilla, Resolve(setDef, file!), item) : ToArray(Load(setDef, file!), item);
-            if (array == null) return false;
+            try
+            {
+                var so = _fixedFor as StockItemData_ScriptableObject;
+                var list = AccessTools.Field(AccessTools.TypeByName(Registry), "Accessories")?.GetValue(null) as IEnumerable;
+                if (so == null || list == null) return;
+                var meshes = so.m_ItemMeshDataList;
+                var itemFile = AccessTools.Method(AccessTools.TypeByName(StudioPaths), "ItemFile");
+                var described = new HashSet<EItemType>();
+                int fixedCount = 0, total = 0;
+                foreach (var acc in list)
+                {
+                    var t = Traverse.Create(acc);
+                    var item = (EItemType)t.Field("Item").GetValue();
+                    var def = t.Field("Def");
+                    var baseItem = (EItemType)def.Field("BaseItem").GetValue();
+                    string label = def.Field("Name").GetValue() as string ?? "?";
+                    string? texFile = def.Field("Texture").GetValue() as string, meshFile = def.Field("Mesh").GetValue() as string;
+                    if (item == EItemType.None || (int)item >= meshes.Count || baseItem < 0 || (int)baseItem >= meshes.Count) continue;
+                    total++;
+                    var vanilla = meshes[(int)baseItem];
+                    if (described.Add(baseItem))
+                    {
+                        Describe($"Vanilla {baseItem}", vanilla);
+                        DumpLayer(vanilla, baseItem.ToString());
+                    }
+                    var md = meshes[(int)item];
+                    Describe($"TCG Studio accessory \"{label}\" (base {baseItem}{(string.IsNullOrEmpty(meshFile) ? "" : ", own model " + (md.mesh != null ? md.mesh.name : "none"))})", md);
 
-            var md = meshes[i];
+                    var shared = vanilla.material;
+                    if (shared == null || !shared.HasProperty(ArrayId) || !(shared.GetTexture(ArrayId) is Texture2DArray))
+                    {
+                        Plugin.Log.LogInfo($"TCG Studio accessory \"{label}\": its base item isn't drawn from a texture array, left to TCG Studio.");
+                        continue;
+                    }
+                    var folder = def.Field("FolderPath").GetValue() as string;
+                    var path = string.IsNullOrEmpty(texFile) || folder == null ? null : itemFile?.Invoke(null, new object[] { folder, texFile! }) as string;
+                    var sprite = string.IsNullOrEmpty(path) ? null
+                        : AccessTools.Method(AccessTools.TypeByName(ImageCache), "Get", new[] { typeof(string) })?.Invoke(null, new object[] { path! }) as Sprite;
+                    var array = ToArray(sprite != null ? sprite.texture : null, item);
+                    if (array == null)
+                    {
+                        Plugin.Log.LogInfo($"TCG Studio accessory \"{label}\": no texture to show ({path ?? "none set"}).");
+                        continue;
+                    }
+                    Use(md, (int)item, array, shared.GetTexture(ArrayId));
+                    fixedCount++;
+                }
+                if (total > 0)
+                    Plugin.Log.LogInfo($"TCG Studio accessories: {fixedCount} of {total} now draw their own texture.");
+            }
+            catch (Exception e)
+            {
+                Plugin.Log.LogWarning("Could not fix TCG Studio's accessory textures: " + e);
+            }
+        }
+
+        /// <summary>
+        /// Points every material slot of <paramref name="md"/> that draws <paramref name="vanillaArray"/> at
+        /// <paramref name="array"/> instead (a copy for shared vanilla materials) and sets its layer to 0. Slots with
+        /// another array or none (a binder's pages, a playmat's underside) keep theirs.
+        /// </summary>
+        private static void Use(ItemMeshData md, int i, Texture array, Texture? vanillaArray)
+        {
             var copies = new Dictionary<Material, Material>();
             Material? Swap(Material? m)
             {
                 if (m == null || !m.HasProperty(ArrayId)) return m;
+                if (vanillaArray != null && m.GetTexture(ArrayId) != vanillaArray) return m;
                 if (copies.TryGetValue(m, out var c)) return c;
                 // TCG Studio's own per-item copy is changed in place; a shared vanilla material gets a copy of its own.
                 c = m.name.StartsWith("TCGCC_", StringComparison.Ordinal) ? m
@@ -151,6 +215,48 @@ namespace TCGCardTracker
             if (md.materialList != null)
                 for (int k = 0; k < md.materialList.Count; k++) md.materialList[k] = Swap(md.materialList[k])!;
             TextureIndex!.SetValue(md, (ushort)0);
+        }
+
+        /// <summary>Saves an item's vanilla texture-array layer (up to 1024 px) as BepInEx\TCGCardTracker-dump\&lt;name&gt;.png.</summary>
+        private static void DumpLayer(ItemMeshData md, string name)
+        {
+            try
+            {
+                if (md.material == null || !md.material.HasProperty(ArrayId) || !(md.material.GetTexture(ArrayId) is Texture2DArray a)) return;
+                int layer = Convert.ToInt32(TextureIndex!.GetValue(md));
+                float scale = Mathf.Min(1f, 1024f / Mathf.Max(a.width, a.height));
+                int w = Mathf.Max(1, (int)(a.width * scale)), h = Mathf.Max(1, (int)(a.height * scale));
+                var rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+                var prev = RenderTexture.active;
+                Graphics.Blit(a, rt, layer, 0);
+                RenderTexture.active = rt;
+                var read = new Texture2D(w, h, TextureFormat.RGBA32, false);
+                read.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                read.Apply();
+                RenderTexture.active = prev;
+                RenderTexture.ReleaseTemporary(rt);
+                var dir = Path.Combine(BepInEx.Paths.BepInExRootPath, "TCGCardTracker-dump");
+                Directory.CreateDirectory(dir);
+                File.WriteAllBytes(Path.Combine(dir, name + ".png"), ImageConversion.EncodeToPNG(read));
+                UnityEngine.Object.Destroy(read);
+            }
+            catch (Exception e)
+            {
+                Plugin.LogOnce("dump-" + name, $"Could not save the {name} texture for checking: {e.Message}");
+            }
+        }
+
+        /// <summary>Gives one custom item a one-layer array of its art. False when it has no art or the copy fails.</summary>
+        private static bool Fix(List<ItemMeshData> meshes, ItemMeshData vanilla, bool box, EItemType item, object? setDef, string? file)
+        {
+            int i = (int)item;
+            if (item == EItemType.None || i < 0 || i >= meshes.Count || string.IsNullOrEmpty(file) || setDef == null) return false;
+            var shared = vanilla.material;
+            if (shared == null || !shared.HasProperty(ArrayId)) return false; // not an array material: nothing to fix
+            var array = box ? BoxArray(vanilla, Resolve(setDef, file!), item) : ToArray(Load(setDef, file!), item);
+            if (array == null) return false;
+
+            Use(meshes[i], i, array, null);
             Arrays[item] = array;
             return true;
         }
