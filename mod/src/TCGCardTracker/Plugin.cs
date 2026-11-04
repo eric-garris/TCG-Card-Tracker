@@ -19,7 +19,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.15.4";
+        public const string Version = "0.17.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -46,6 +46,9 @@ namespace TCGCardTracker
         internal static ConfigEntry<float> MarketCardsPerCustomer = null!;
         internal static ConfigEntry<float> MarketRecheckSeconds = null!;
         internal static ConfigEntry<float> MarketSaleChance = null!;
+        internal static ConfigEntry<bool> QuickFillAllSetsButton = null!;
+        internal static ConfigEntry<bool> QuickFillAllSetsBoxes = null!;
+        internal static ConfigEntry<bool> QuickFillAllSetsDonations = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -146,6 +149,13 @@ namespace TCGCardTracker
                 "Multiplies the chance (1 - 10, capped at 100%) that a TCG Marketplace listing finds a buyer at each check. " +
                 "TCG Marketplace sets that chance by your price against market value: 80% at 85% of market or less, 55% at " +
                 "95%, 25% at 105%, and much lower above. 1 leaves it as TCG Marketplace has it.");
+            QuickFillAllSetsButton = Config.Bind("Quick Fill", "AllSetsButton", true,
+                "Show an \"All sets\" button on the quick fill screen of bulk boxes, card storage shelves and donation bins. While it is on, " +
+                "quick fill takes spare cards from every set (base game and TCG Studio) instead of only the picked set.");
+            QuickFillAllSetsBoxes = Config.Bind("Quick Fill", "AllSetsBoxes", false,
+                "Remembers whether \"All sets\" is on for bulk boxes and card storage shelves (set with the button in game).");
+            QuickFillAllSetsDonations = Config.Bind("Quick Fill", "AllSetsDonations", false,
+                "Remembers whether \"All sets\" is on for donation bins (set with the button in game).");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
             TrackerWindow.CaptureStartupSettings();
@@ -165,6 +175,7 @@ namespace TCGCardTracker
             RevealScaleGuard.Install();
             PointAndSlots.Install();
             Marketplace.Install();
+            QuickFillAllSets.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
@@ -266,6 +277,7 @@ namespace TCGCardTracker
             Window.Draw();
             PackWatcher.Toast.Draw();
             TradeBanner.Draw();
+            QuickFillAllSets.Draw();
         }
 
         private void OnDestroy()

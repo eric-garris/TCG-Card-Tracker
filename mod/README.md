@@ -73,6 +73,12 @@ Press **F7** in your shop to open it.
 - **Bulk amounts in the Point And Slots shop:** hold Shift while clicking a card's - or + to change the amount
   by 10, or Ctrl for 100. Or click the amount between the buttons, type a number and press Enter to put exactly
   that many in the cart (0 takes the card out). Turn it off with `[Point And Slots] BulkAmounts`.
+- **Quick fill from all sets:** the quick fill screen of bulk boxes, card storage shelves and donation bins gets an
+  **All sets** button beside the set button. While it is on (the set button then reads "All sets"), quick fill takes
+  spare cards from every set at once, base game and TCG Studio, with the usual price range, rarity and "keep at least"
+  settings; the cards with the most spares go in first, as in the game's own quick fill. Picking a set on the set button
+  turns it off again. Boxes and shelves remember one choice, donation bins their own. Hide the button with
+  `[Quick Fill] AllSetsButton`.
 - **Faster TCG Marketplace sales:** with the TCG Marketplace mod installed, listings sell much faster than its
   own pace of a customer every 2 - 4 seconds buying 1 - 2 cards. By default a customer comes about every second
   (`[TCG Marketplace] CustomerSeconds`) and buys up to 10 cards (`CardsPerCustomer`), and each listing is checked
@@ -108,7 +114,7 @@ Press **F7** in your shop to open it.
   one thing it changes is which set a trading customer's card, and the card they ask for, comes
   from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
   custom sets to that mod's card list and, once per new rarity name, to its rarity settings. With TCG Marketplace
-  installed, it changes how fast that mod's listings sell. With TCG Studio installed, it changes which picture its
+  installed, it changes how fast that mod's listings sell. With "All sets" on, quick fill picks cards from every set. With TCG Studio installed, it changes which picture its
   custom packs, boxes and accessories draw, and their label icons (`FixPackSkins`).
 
 ## Install
@@ -126,7 +132,7 @@ Most settings can be changed in game on the tracker's **Settings** tab (press F7
 Hover a setting to see what it does; changes are saved straight away. A setting that shows `*` after you change it needs a
 game restart. They are all also in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio pack art (`FixPackSkins`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), TCG Marketplace sale speed (`FasterSales`, `CustomerSeconds`, `CardsPerCustomer`, `RecheckSeconds`, `SaleChance`), which places are counted, and
+(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio pack art (`FixPackSkins`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), TCG Marketplace sale speed (`FasterSales`, `CustomerSeconds`, `CardsPerCustomer`, `RecheckSeconds`, `SaleChance`), the quick fill "All sets" button (`AllSetsButton`), which places are counted, and
 `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.

@@ -193,6 +193,8 @@ namespace TCGCardTracker
         }
 
         /// <summary>A card's on-screen rectangle in GUI pixels (top-left origin), or null when it can't be placed.</summary>
+        internal static Rect? ScreenRect(Component? anchor) => CardRect(anchor);
+
         private static Rect? CardRect(Component? anchor)
         {
             if (anchor == null || !anchor.gameObject.activeInHierarchy) return null;
