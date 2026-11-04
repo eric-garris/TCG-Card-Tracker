@@ -168,8 +168,8 @@ namespace TCGCardTracker
             var used = Used(map);
             var free = new Queue<int>(Enumerable.Range(0, cols * rows).Where(c => !used.Contains(c) && Empty(atlas, Cell(c, cols, rows, top, Probe, Probe))));
             int total = free.Count;
-            // Packs first, then boxes, then anything else TCG Studio added (accessories).
-            foreach (var (item, _) in _items.OrderBy(x => _isPack?.Invoke(x.item) == true ? 0 : _isBox?.Invoke(x.item) == true ? 1 : 2))
+            // Packs first, then accessories, then boxes: a box without a cell can still show its set's pack icon.
+            foreach (var (item, _) in _items.OrderBy(x => _isPack?.Invoke(x.item) == true ? 0 : _isBox?.Invoke(x.item) == true ? 2 : 1))
             {
                 if (free.Count == 0) break;
                 _cells[item] = free.Dequeue();
@@ -356,7 +356,7 @@ namespace TCGCardTracker
 
         /// <summary>
         /// Adds each custom item to the atlas map: its own cell if it got one, else (box) its set's pack cell, else the
-        /// basic pack / box icon.
+        /// basic pack / box icon; an accessory without a cell shows its base item's icon (a vanilla sleeve, playmat, ...).
         /// </summary>
         private static void ExtendMap(UnityEngine.Object map)
         {
@@ -380,6 +380,7 @@ namespace TCGCardTracker
                     shared++;
                 }
                 else if (_isPack?.Invoke(item) == true) { cell = packCell; shared++; }
+                else if (BaseOf(item) is EItemType b && b != EItemType.None && (cell = VanillaCell(b)) >= 0) shared++;
                 else continue;
                 if (cell < 0) continue;
                 int at = values.IndexOf((int)item);
@@ -390,6 +391,14 @@ namespace TCGCardTracker
             _itemCells.SetValue(map, cells.ToArray());
             _itemCache?.SetValue(map, null); // rebuilt from the arrays on the next lookup
             Plugin.Log.LogInfo($"TCG Studio label icons: {own} custom item(s) show their own label icon, {shared} a shared one.");
+        }
+
+        /// <summary>The vanilla item a TCG Studio accessory is built on (Registry.GetAccessoryByItem(item).Def.BaseItem), or None.</summary>
+        private static EItemType BaseOf(EItemType item)
+        {
+            var get = AccessTools.Method(AccessTools.TypeByName(Registry), "GetAccessoryByItem", new[] { typeof(EItemType) });
+            var acc = get?.Invoke(null, new object[] { item });
+            return acc != null && Traverse.Create(acc).Field("Def").Field("BaseItem").GetValue() is EItemType b ? b : EItemType.None;
         }
 
         /// <summary>The pack item of the TCG Studio set a box item belongs to (Registry.GetByItem(box).PackItem), or None.</summary>

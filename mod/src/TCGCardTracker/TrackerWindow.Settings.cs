@@ -72,7 +72,7 @@ namespace TCGCardTracker
                 }),
                 ("TCG Studio", new[]
                 {
-                    new Setting(Plugin.FixPackSkins, "Fix pack and box art", startup: true),
+                    new Setting(Plugin.FixPackSkins, "Fix pack, box and accessory art", startup: true),
                 }),
                 ("Point And Slots", new[]
                 {

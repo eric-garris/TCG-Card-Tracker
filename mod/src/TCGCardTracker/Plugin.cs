@@ -19,7 +19,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.15.3";
+        public const string Version = "0.15.4";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -96,7 +96,7 @@ namespace TCGCardTracker
             FixPackSkins = Config.Bind("TCG Studio", "FixPackSkins", true,
                 "With TCG Studio installed: show its custom booster pack and box art on the 3D packs and boxes. Since game 1.03 " +
                 "(Unity 6) the game draws all packs from one stacked texture (a texture array), and TCG Studio's art doesn't reach " +
-                "it, so custom packs looked vanilla. The same goes for the icons on shelf and delivery box labels (since 1.03 drawn " +
+                "it, so custom packs looked vanilla. TCG Studio's accessories (sleeves, playmats, comics, collection books, figurines) are fixed the same way. The same goes for the icons on shelf and delivery box labels (since 1.03 drawn " +
                 "from one icon atlas that has no TCG Studio items), so this also adds TCG Studio's pack and box icons there. " +
                 "A temporary workaround until TCG Studio supports game 1.03: turn it off once " +
                 "a TCG Studio update shows its packs, boxes and label icons correctly by itself. Also logs how the game draws the " +
