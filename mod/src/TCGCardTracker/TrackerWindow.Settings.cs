@@ -74,6 +74,13 @@ namespace TCGCardTracker
                 {
                     new Setting(Plugin.RestockHighestValue, "Restock most valuable cards first"),
                 }),
+                ("Quick fill", new[]
+                {
+                    new Setting(Plugin.QuickFillAllSetsButton, "\"All sets\" button"),
+                    new Setting(Plugin.QuickFillAllSetsBoxes, "All sets: boxes and shelves"),
+                    new Setting(Plugin.QuickFillAllSetsDonations, "All sets: donation bins"),
+                    new Setting(Plugin.QuickFillAllSetsWorkbench, "All sets: workbench"),
+                }),
                 ("TCG Studio", new[]
                 {
                     new Setting(Plugin.FixPackSkins, "Fix pack, box and accessory art", startup: true),
