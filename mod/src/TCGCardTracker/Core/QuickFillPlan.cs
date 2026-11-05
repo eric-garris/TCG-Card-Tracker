@@ -55,5 +55,37 @@ namespace TCGCardTracker.Core
             }
             return result;
         }
+
+        /// <summary>
+        /// The workbench's bulk box bundle, run over cards from any number of sets: <paramref name="size"/> cards taken
+        /// round-robin, each card giving a random 1 to spares + 4 (at most <paramref name="perTurn"/>, never more than it
+        /// has) per turn, as the game does for one set. Returns nothing when all spares together are fewer than
+        /// <paramref name="size"/> (the game then says there aren't enough cards). Cards are taken in the order given;
+        /// the caller shuffles them so one set doesn't fill the whole box.
+        /// </summary>
+        public static List<(T card, int amount)> Bundle<T>(IList<Candidate<T>> candidates, int size, int perTurn, Func<int, int, int> random)
+        {
+            var result = new List<(T, int)>();
+            var list = candidates.Where(c => c.Spares > 0).ToList();
+            if (list.Sum(c => (long)c.Spares) < size) return result;
+            var left = list.Select(c => c.Spares).ToArray();
+            int used = 0;
+            while (used < size)
+            {
+                bool progress = false;
+                for (int k = 0; k < list.Count && used < size; k++)
+                {
+                    if (left[k] <= 0) continue;
+                    int take = Math.Max(1, Math.Min(perTurn, random(1, left[k] + 5)));
+                    take = Math.Min(take, Math.Min(left[k], size - used));
+                    used += take;
+                    left[k] -= take;
+                    result.Add((list[k].Card, take));
+                    progress = true;
+                }
+                if (!progress) break;
+            }
+            return result;
+        }
     }
 }

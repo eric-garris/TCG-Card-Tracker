@@ -44,5 +44,22 @@ namespace TCGCardTracker.Tests
             Assert.All(plan, p => Assert.True(p.amount <= 1000));
             Assert.Equal(2500, plan.Sum(p => p.amount));
         }
+
+        [Fact]
+        public void BundleTakesExactlyTheBoxSizeAtMostTenPerTurn()
+        {
+            var cands = new[] { C("A", 50), C("B", 50), C("C", 50) };
+            var plan = QuickFillPlan.Bundle(cands, 100, 10, (a, b) => b - 1);
+            Assert.Equal(100, plan.Sum(p => p.amount));
+            Assert.All(plan, p => Assert.InRange(p.amount, 1, 10));
+            Assert.Equal(new[] { "A", "B", "C" }, plan.Take(3).Select(p => p.card));
+        }
+
+        [Fact]
+        public void BundleNeedsEnoughSpares()
+        {
+            Assert.Empty(QuickFillPlan.Bundle(new[] { C("A", 60), C("B", 39) }, 100, 10, (a, b) => a));
+            Assert.Equal(100, QuickFillPlan.Bundle(new[] { C("A", 60), C("B", 40) }, 100, 10, (a, b) => a).Sum(p => p.amount));
+        }
     }
 }

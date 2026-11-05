@@ -75,6 +75,7 @@ namespace TCGCardTracker
                     new Setting(Plugin.QuickFillAllSetsButton, "\"All sets\" button"),
                     new Setting(Plugin.QuickFillAllSetsBoxes, "All sets: boxes and shelves"),
                     new Setting(Plugin.QuickFillAllSetsDonations, "All sets: donation bins"),
+                    new Setting(Plugin.QuickFillAllSetsWorkbench, "All sets: workbench"),
                 }),
                 ("TCG Studio", new[]
                 {
