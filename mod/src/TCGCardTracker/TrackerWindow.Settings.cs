@@ -70,6 +70,10 @@ namespace TCGCardTracker
                     new Setting(Plugin.CustomTradeChance, "TCG Studio trade chance", min: 0f, max: 1f, step: 0.05f),
                     new Setting(Plugin.CustomRequestChance, "TCG Studio ask chance", min: 0f, max: 1f, step: 0.05f),
                 }),
+                ("Employees", new[]
+                {
+                    new Setting(Plugin.RestockHighestValue, "Restock most valuable cards first"),
+                }),
                 ("TCG Studio", new[]
                 {
                     new Setting(Plugin.FixPackSkins, "Fix pack, box and accessory art", startup: true),
