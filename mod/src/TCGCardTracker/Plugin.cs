@@ -46,6 +46,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<float> MarketCardsPerCustomer = null!;
         internal static ConfigEntry<float> MarketRecheckSeconds = null!;
         internal static ConfigEntry<float> MarketSaleChance = null!;
+        internal static ConfigEntry<bool> RestockHighestValue = null!;
         internal static ConfigEntry<bool> QuickFillAllSetsButton = null!;
         internal static ConfigEntry<bool> QuickFillAllSetsBoxes = null!;
         internal static ConfigEntry<bool> QuickFillAllSetsDonations = null!;
@@ -150,6 +151,10 @@ namespace TCGCardTracker
                 "Multiplies the chance (1 - 10, capped at 100%) that a TCG Marketplace listing finds a buyer at each check. " +
                 "TCG Marketplace sets that chance by your price against market value: 80% at 85% of market or less, 55% at " +
                 "95%, 25% at 105%, and much lower above. 1 leaves it as TCG Marketplace has it.");
+            RestockHighestValue = Config.Bind("Employees", "RestockHighestValue", true,
+                "Employees restocking card displays from a card storage shelf take its most valuable card first (market " +
+                "price as the tracker shows it; graded cards at their graded price). Off: the game's own random pick, where " +
+                "every different card on the shelf has the same chance. Shelves set so workers can't take from them stay untouched.");
             QuickFillAllSetsButton = Config.Bind("Quick Fill", "AllSetsButton", true,
                 "Show an \"All sets\" button on the quick fill screen of bulk boxes, card storage shelves and donation bins, and on the " +
                 "workbench. While it is on, quick fill (or the workbench bulk box) takes spare cards from every set (base game and TCG Studio) " +
@@ -179,6 +184,7 @@ namespace TCGCardTracker
             RevealScaleGuard.Install();
             PointAndSlots.Install();
             Marketplace.Install();
+            RestockOrder.Install();
             QuickFillAllSets.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
