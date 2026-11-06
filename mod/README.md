@@ -21,6 +21,10 @@ Press **F7** in your shop to open it.
   installed, a **Graded by** row appears in the window: switch companies off to count only the slabs of the
   others (for example PSA only). Ungraded copies always count. Slabs graded before that mod was installed count
   as its `LegacyGrader` company (TCG by default).
+- **TCG Studio sets in CardGradeOverhaul:** on its own, CardGradeOverhaul's grading page only lists the
+  base-game sets. With TCG Studio installed, the tracker adds your custom sets to that page and its set menu
+  (after the base-game sets), so their cards can be picked and sent for grading. Turn it off with
+  `[CardGradeOverhaul] CustomSets`.
 - **New for your collection:** after you open packs, a short popup lists the cards that are new to
   you (no copy anywhere you count) or that you now own at a better grade than before. It appears
   once the opening screen closes, so it never spoils a reveal. Cards from an auto pack opener get

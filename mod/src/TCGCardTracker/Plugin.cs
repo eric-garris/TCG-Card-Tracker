@@ -15,11 +15,13 @@ namespace TCGCardTracker
     [BepInDependency(PointAndSlots.Guid, BepInDependency.DependencyFlags.SoftDependency)]
     // And after TCG Marketplace, so its sale code exists to patch.
     [BepInDependency(Marketplace.Guid, BepInDependency.DependencyFlags.SoftDependency)]
+    // And after CardGradeOverhaul, so its grading page exists to patch.
+    [BepInDependency(GradingMod.Guid, BepInDependency.DependencyFlags.SoftDependency)]
     public sealed class Plugin : BaseUnityPlugin
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.18.0";
+        public const string Version = "0.19.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -51,6 +53,7 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> QuickFillAllSetsBoxes = null!;
         internal static ConfigEntry<bool> QuickFillAllSetsDonations = null!;
         internal static ConfigEntry<bool> QuickFillAllSetsWorkbench = null!;
+        internal static ConfigEntry<bool> GradingCustomSets = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -165,6 +168,10 @@ namespace TCGCardTracker
                 "Remembers whether \"All sets\" is on for donation bins (set with the button in game).");
             QuickFillAllSetsWorkbench = Config.Bind("Quick Fill", "AllSetsWorkbench", false,
                 "Remembers whether \"All sets\" is on for bundling bulk boxes at the workbench (set with the button in game).");
+            GradingCustomSets = Config.Bind("CardGradeOverhaul", "CustomSets", true,
+                "With TCG Studio and the CardGradeOverhaul mod installed: list TCG Studio's sets on its grading page (cards to " +
+                "send and the set menu); on its own it only lists the base-game sets. This hooks CardGradeOverhaul's code; when " +
+                "it is off at startup, the hook is not installed at all.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
             TrackerWindow.CaptureStartupSettings();
@@ -186,6 +193,7 @@ namespace TCGCardTracker
             Marketplace.Install();
             RestockOrder.Install();
             QuickFillAllSets.Install();
+            GradingMod.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
