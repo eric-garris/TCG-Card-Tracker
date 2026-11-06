@@ -324,9 +324,15 @@ namespace TCGCardTracker
             }
         }
 
-        public static Collection Read(Catalog catalog)
+        /// <summary>Reads every copy; with `companies`, graded copies count only for the grading companies switched on.</summary>
+        public static Collection Read(Catalog catalog, bool[]? companies = null)
         {
             var c = new Collection(catalog);
+            if (companies != null && GradingMod.Present)
+            {
+                c.Companies = companies;
+                c.LegacyCompany = GradingMod.LegacyCompany();
+            }
 
             foreach (var set in catalog.Sets)
                 for (int li = 0; li < set.Lists.Length; li++)
@@ -361,6 +367,7 @@ namespace TCGCardTracker
             Foil = d.isFoil,
             Destiny = d.isDestiny,
             Grade = d.cardGrade,
+            GradedIndex = d.gradedCardIndex,
         };
 
         private static CompactRec Compact(CompactCardDataAmount r) => new CompactRec

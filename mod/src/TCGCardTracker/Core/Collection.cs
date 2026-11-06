@@ -26,6 +26,7 @@ namespace TCGCardTracker.Core
         public bool Foil;
         public bool Destiny;
         public int Grade;
+        public int GradedIndex;
     }
 
     /// <summary>A compact row (CompactCardDataAmount): graded album, storage, decks, donation, openers.</summary>
@@ -54,6 +55,13 @@ namespace TCGCardTracker.Core
         public int Unknown;
         public int ModdedGrades;
 
+        /// <summary>Grading companies to count (Graders order); null counts every graded copy.</summary>
+        public bool[]? Companies;
+        /// <summary>The company of slabs without a grading mod's cert (see Graders.CompanyOf).</summary>
+        public int LegacyCompany;
+        /// <summary>Graded copies left out because their company is not in Companies.</summary>
+        public int OtherCompanies;
+
         public Collection(Catalog catalog)
         {
             Catalog = catalog;
@@ -70,10 +78,19 @@ namespace TCGCardTracker.Core
             grade < VanillaGradeLimit ? 10 :
             ColOther;
 
-        private void Add(Loc loc, Card card, int grade, int copies)
+        private void Add(Loc loc, Card card, int grade, int copies, int gradedIndex = 0)
         {
             if (copies <= 0) return;
             int col = ColumnOf(grade);
+            if (col > 0 && Companies != null)
+            {
+                int company = Graders.CompanyOf(gradedIndex, LegacyCompany);
+                if (company >= Companies.Length || !Companies[company])
+                {
+                    OtherCompanies += copies;
+                    return;
+                }
+            }
             if (col == ColOther) ModdedGrades += copies;
             ByLoc[(int)loc][card.Index * Cols + col] += copies;
         }
@@ -101,7 +118,7 @@ namespace TCGCardTracker.Core
                 Unknown++;
                 return;
             }
-            Add(Loc.Binder, card, r.Amount, 1);
+            Add(Loc.Binder, card, r.Amount, 1, r.GradedIndex);
         }
 
         public void AddPhysical(Loc loc, PhysicalRec r)
@@ -113,7 +130,7 @@ namespace TCGCardTracker.Core
                 Unknown++;
                 return;
             }
-            Add(loc, card, r.Grade, 1);
+            Add(loc, card, r.Grade, 1, r.GradedIndex);
         }
 
         /// <summary>Container rows hold a copy count, except graded rows (gradedCardIndex &gt; 0) whose amount is the grade.</summary>
@@ -125,7 +142,7 @@ namespace TCGCardTracker.Core
                 Unknown++;
                 return;
             }
-            if (r.GradedIndex > 0) Add(loc, card, r.Amount, 1);
+            if (r.GradedIndex > 0) Add(loc, card, r.Amount, 1, r.GradedIndex);
             else Add(loc, card, 0, r.Amount);
         }
 
