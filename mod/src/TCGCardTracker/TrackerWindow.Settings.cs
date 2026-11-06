@@ -94,6 +94,10 @@ namespace TCGCardTracker
                     new Setting(Plugin.PointAndSlotsPackPoints, "Points for packs", startup: true),
                     new Setting(Plugin.PointAndSlotsBulkAmounts, "Bulk shop amounts", startup: true),
                 }),
+                ("CardGradeOverhaul", new[]
+                {
+                    new Setting(Plugin.GradingCustomSets, "TCG Studio sets on grading page", startup: true),
+                }),
                 ("TCG Marketplace", new[]
                 {
                     new Setting(Plugin.MarketFasterSales, "Faster sales", startup: true),
