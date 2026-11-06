@@ -243,6 +243,44 @@ namespace TCGCardTracker.Tests
             Assert.False(CardQueries.Matches(burpigGoldFoil, "12"));
         }
 
+        [Fact]
+        public void GraderCertsNameTheCompany()
+        {
+            Assert.Equal(1, Graders.CompanyOf(1_100_000_123, 0)); // PSA
+            Assert.Equal(3, Graders.CompanyOf(1_312_345_678, 0)); // CGC
+            Assert.Equal(0, Graders.CompanyOf(1_000_000_001, 2)); // TCG cert
+            Assert.Equal(2, Graders.CompanyOf(5, 2));             // older slab: the legacy company
+            Assert.Equal(2, Graders.CompanyOf(2_100_000_000, 2)); // past the known companies
+            Assert.Equal(4, Graders.Parse(" tag "));
+            Assert.Equal(0, Graders.Parse(""));
+            Assert.Equal(0, Graders.Parse("XYZ"));
+        }
+
+        [Fact]
+        public void CompanyFilterLeavesOutOtherCompaniesSlabsOnly()
+        {
+            var c = new Collection(Cat) { Companies = new[] { false, true, false, false, false, false }, LegacyCompany = 0 };
+            c.AddAlbum(Cat.SetForExpansion(0)!, 0, new List<int> { 3 });                                                   // ungraded: always counted
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 10, GradedIndex = 1_100_000_001 }); // PSA 10
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 9, GradedIndex = 1_200_000_002 });  // BGS 9
+            c.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 8, GradedIndex = 7 });              // old slab = TCG
+            c.AddPhysical(Loc.Displays, new PhysicalRec { Expansion = 0, Monster = 1, Grade = 7, GradedIndex = 1_100_000_003 }); // PSA 7
+            c.AddCompact(Loc.Storage, new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 6, GradedIndex = 1_300_000_004 });  // CGC 6
+
+            var t = c.Combine(All);
+            var card = Cat.FromCompact(0, 0, false)!;
+            Assert.Equal(3, Aggregate.Copies(t, card, Column.Ungraded));
+            Assert.Equal(1, Aggregate.Copies(t, card, new Column(10)));
+            Assert.Equal(1, Aggregate.Copies(t, card, new Column(7)));
+            Assert.Equal(2, Aggregate.Copies(t, card, Column.Graded));
+            Assert.Equal(3, c.OtherCompanies);
+
+            var everything = new Collection(Cat);
+            everything.AddGradedAlbumRow(new CompactRec { Expansion = 0, SaveIndex = 0, Amount = 9, GradedIndex = 1_200_000_002 });
+            Assert.Equal(1, Aggregate.Copies(everything.Combine(All), card, Column.Graded));
+            Assert.Equal(0, everything.OtherCompanies);
+        }
+
         private static (int, int, int) Tuple(Agg a) => (a.Owned, a.Total, a.Copies);
     }
 }

@@ -17,6 +17,10 @@ Press **F7** in your shop to open it.
   its own window (drag it anywhere, click the picture again or `x` to close).
 - It counts cards wherever they are: binders, displays and shelves, storage, decks, at grading,
   card boxes, in hand, donation boxes and pack openers. Each place can be switched off.
+- With CardGradeOverhaul (slabs from PSA, BGS, CGC, TAG, SGC and the game's TCG)
+  installed, a **Graded by** row appears in the window: switch companies off to count only the slabs of the
+  others (for example PSA only). Ungraded copies always count. Slabs graded before that mod was installed count
+  as its `LegacyGrader` company (TCG by default).
 - **New for your collection:** after you open packs, a short popup lists the cards that are new to
   you (no copy anywhere you count) or that you now own at a better grade than before. It appears
   once the opening screen closes, so it never spoils a reveal. Cards from an auto pack opener get

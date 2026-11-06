@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Text;
 using TCGCardTracker.Core;
@@ -70,6 +71,8 @@ namespace TCGCardTracker
 
         private readonly HashSet<string> _expanded = new HashSet<string>();
         private readonly bool[] _tiers = { true, true, true, true };
+        /// <summary>Grading companies counted (Core.Graders order); shown only with CardGradeOverhaul installed.</summary>
+        private readonly bool[] _companies = Enumerable.Repeat(true, Graders.Count).ToArray();
 
         // Card list selection.
         private SetDef? _selSet;
@@ -197,7 +200,7 @@ namespace TCGCardTracker
                     _shelvesLive = Plugin.LiveShelves.Value && GameReader.RefreshShelfData();
                 }
                 if (_catalog == null) return;
-                _collection = GameReader.Read(_catalog);
+                _collection = GameReader.Read(_catalog, Array.TrueForAll(_companies, on => on) ? null : _companies);
                 _refreshedAt = Time.realtimeSinceStartup;
                 _status = "";
                 Recount();
@@ -480,11 +483,12 @@ namespace TCGCardTracker
             if (_tab == 0) DrawOverview();
             else DrawCardList();
 
-            if (_collection.Unknown > 0 || _collection.ModdedGrades > 0)
+            if (_collection.Unknown > 0 || _collection.ModdedGrades > 0 || _collection.OtherCompanies > 0)
             {
                 GUILayout.Label(
                     (_collection.Unknown > 0 ? $"{_collection.Unknown} unrecognised card(s) not counted. " : "") +
-                    (_collection.ModdedGrades > 0 ? $"{_collection.ModdedGrades} graded card(s) have a modded grade (counted as Other)." : ""),
+                    (_collection.ModdedGrades > 0 ? $"{_collection.ModdedGrades} graded card(s) have a modded grade (counted as Other). " : "") +
+                    (_collection.OtherCompanies > 0 ? $"{_collection.OtherCompanies} graded card(s) from other grading companies not counted." : ""),
                     Styles.Muted);
             }
             GUI.DragWindow(new Rect(0, 0, 10000, 22));
@@ -531,7 +535,27 @@ namespace TCGCardTracker
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
-            if (changed) Recount();
+            bool reread = false;
+            if (GradingMod.Present)
+            {
+                GUILayout.BeginHorizontal();
+                GUILayout.Label(new GUIContent("Graded by:", "Graded copies count only for the grading companies switched on (CardGradeOverhaul). Ungraded copies always count."), Styles.Muted, GUILayout.Width(100));
+                for (int i = 0; i < Graders.Count; i++)
+                {
+                    bool v = GUILayout.Toggle(_companies[i], Graders.Names[i], Styles.Chip);
+                    if (v != _companies[i])
+                    {
+                        _companies[i] = v;
+                        if (!Array.Exists(_companies, on => on)) for (int k = 0; k < _companies.Length; k++) _companies[k] = true;
+                        reread = true;
+                    }
+                }
+                GUILayout.FlexibleSpace();
+                GUILayout.EndHorizontal();
+            }
+
+            if (reread) Refresh(full: false);
+            else if (changed) Recount();
         }
 
         private void DrawOverview()
