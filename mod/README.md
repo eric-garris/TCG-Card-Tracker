@@ -120,6 +120,12 @@ Press **F7** in your shop to open it.
   slots only, so opening a bigger TCG Studio pack (imported Yu-Gi-Oh and Pokemon sets have 9 or more cards) hit an
   error on every frame and the opening screen froze. The tracker gives the extra slots a size too, so these packs
   open normally. **This is a temporary workaround** until TCG Studio supports game 1.03.
+- **Workbench bulk boxes vanishing on reload (TCG Studio on game 1.03+):** on every load TCG Studio clears out items
+  it thinks belong to a removed custom set, and it judges that by the item list of the game it was built for (before
+  1.03). Items added after that (such as the workbench's bulk boxes, new in 1.03) looked like leftovers, so they
+  were deleted from shelves along with the shelf's price tag. The tracker marks the game's own items as installed
+  while that cleanup runs, so they stay. Boxes already lost can't come back. **This is a temporary
+  workaround** until TCG Studio supports game 1.03.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening, collecting from pack openers and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off

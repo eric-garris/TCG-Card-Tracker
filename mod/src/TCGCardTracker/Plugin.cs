@@ -21,7 +21,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.19.0";
+        public const string Version = "0.19.1";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -189,6 +189,7 @@ namespace TCGCardTracker
             PriceTagIcons.Install();
             ShopSignGuard.Install();
             RevealScaleGuard.Install();
+            StudioItemGuard.Install();
             PointAndSlots.Install();
             Marketplace.Install();
             RestockOrder.Install();
