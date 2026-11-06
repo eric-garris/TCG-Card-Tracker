@@ -44,6 +44,8 @@ namespace TCGCardTracker
 
         private bool _open;
         private Rect _rect;
+        /// <summary>Screen width in window units (UI scale applied), so wrapped rows never run off screen.</summary>
+        private float _screenWidth = 1920f;
         private bool _placed;
         private int _tab;
         private Vector2 _gridScroll;
@@ -417,6 +419,7 @@ namespace TCGCardTracker
             {
                 GUI.matrix = Matrix4x4.Scale(new Vector3(scale, scale, 1f));
                 float sw = Screen.width / scale, sh = Screen.height / scale;
+                _screenWidth = sw;
                 if (!_placed)
                 {
                     float w = Mathf.Min(NameWidth + CellWidth * GridColumns.Length + 60f, sw - 40f);
@@ -606,15 +609,31 @@ namespace TCGCardTracker
             if (_selSet == null) _selSet = _catalog!.Sets.Count > 0 ? _catalog.Sets[0] : null;
             if (_selSet == null) return;
 
+            // Many card-set mods' sets do not fit on one line: the set buttons wrap onto as many rows as needed.
+            const float LabelWidth = 60f;
+            float room = Mathf.Max(200f, Mathf.Min(_rect.width, _screenWidth - 40f) - LabelWidth - 40f);
+            float used = 0f;
             GUILayout.BeginHorizontal();
-            GUILayout.Label("Set:", Styles.Muted, GUILayout.Width(60));
+            GUILayout.Label("Set:", Styles.Muted, GUILayout.Width(LabelWidth));
             foreach (var s in _catalog!.Sets)
+            {
+                float w = Styles.Chip.CalcSize(new GUIContent(s.Name)).x + Styles.Chip.margin.horizontal;
+                if (used > 0f && used + w > room)
+                {
+                    GUILayout.FlexibleSpace();
+                    GUILayout.EndHorizontal();
+                    GUILayout.BeginHorizontal();
+                    GUILayout.Space(LabelWidth + Styles.Muted.margin.horizontal);
+                    used = 0f;
+                }
+                used += w;
                 if (GUILayout.Toggle(_selSet == s, s.Name, Styles.Chip) && _selSet != s)
                 {
                     _selSet = s;
                     _selGroup = null;
                     _list = null;
                 }
+            }
             GUILayout.FlexibleSpace();
             GUILayout.EndHorizontal();
 
