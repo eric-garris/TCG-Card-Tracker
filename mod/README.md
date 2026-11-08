@@ -25,6 +25,14 @@ Press **F7** in your shop to open it.
   base-game sets. With TCG Studio installed, the tracker adds your custom sets to that page and its set menu
   (after the base-game sets), so their cards can be picked and sent for grading. Turn it off with
   `[CardGradeOverhaul] CustomSets`.
+- **Scan scores in the binder (CardGradeOverhaul):** cards with scanned copies show their lowest condition
+  score left of the count, in CardGradeOverhaul's colours (`62%`, or a range like `58-66%` for a copy only
+  looked at by hand, then `·3` when 3 copies are scanned). With TCG Studio's enhanced binder, its sort panel
+  gets a **Scan score** filter: *Any score*, *Scanned*, or *Below 70%* (change the number with − / +), each
+  matching version in its own slot. It works in the card storage shelf picker too, so low-scoring cards are
+  easy to put on a shelf to sell. Copies already on storage shelves count as the lowest-scoring ones, so they
+  don't show again. Turn off with `[CardGradeOverhaul] ScoreBadges` / `ScoreFilter`; the threshold is
+  `ScoreThreshold`.
 - **New for your collection:** after you open packs, a short popup lists the cards that are new to
   you (no copy anywhere you count) or that you now own at a better grade than before. It appears
   once the opening screen closes, so it never spoils a reveal. Cards from an auto pack opener get

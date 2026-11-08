@@ -97,6 +97,9 @@ namespace TCGCardTracker
                 ("CardGradeOverhaul", new[]
                 {
                     new Setting(Plugin.GradingCustomSets, "TCG Studio sets on grading page", startup: true),
+                    new Setting(Plugin.ScanScoreBadges, "Scan scores on binder cards", startup: true),
+                    new Setting(Plugin.ScanScoreFilter, "Scan score filter in binder", startup: true),
+                    new Setting(Plugin.ScanScoreThreshold, "\"Below\" filter score (%)", min: 5f, max: 100f, step: 5f),
                 }),
                 ("TCG Marketplace", new[]
                 {
