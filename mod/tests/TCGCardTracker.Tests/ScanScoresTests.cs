@@ -85,5 +85,60 @@ namespace TCGCardTracker.Tests
             Assert.Equal(70f, ScanScores.Clamp(float.NaN));
             Assert.Equal("Below 65%", ScanScores.BelowLabel(65f));
         }
+    
+
+        [Fact]
+        public void SortForMapsBinderSorts()
+        {
+            Assert.Equal(ScanSort.Price, ScanScores.SortFor("Price", false));
+            Assert.Equal(ScanSort.TotalValue, ScanScores.SortFor("TotalValue", false));
+            Assert.Equal(ScanSort.Amount, ScanScores.SortFor("Amount", false));
+            Assert.Equal(ScanSort.Keep, ScanScores.SortFor("Name", false));
+            Assert.Equal(ScanSort.Keep, ScanScores.SortFor(null, false));
+            Assert.Equal(ScanSort.Score, ScanScores.SortFor("Price", true));
+        }
+
+        private static List<ScanSlot> Slots() => new List<ScanSlot>
+        {
+            new ScanSlot(0, 80, 1.5f, 1),  // card A, cheap version
+            new ScanSlot(1, 60, 40f, 2),   // card B, expensive
+            new ScanSlot(2, 85, 12f, 5),
+            new ScanSlot(3, 60, 3f, 1),
+        };
+
+        [Fact]
+        public void PriceSortIsPerVersion()
+        {
+            var s = Slots();
+            ScanScores.Sort(s, ScanSort.Price);
+            Assert.Equal(new[] { 1, 2, 3, 0 }, s.ConvertAll(x => x.Order));
+        }
+
+        [Fact]
+        public void ScoreSortIsLowestFirstThenPrice()
+        {
+            var s = Slots();
+            ScanScores.Sort(s, ScanSort.Score);
+            Assert.Equal(new[] { 1, 3, 0, 2 }, s.ConvertAll(x => x.Order));
+        }
+
+        [Fact]
+        public void TotalValueAndAmountSorts()
+        {
+            var s = Slots();
+            ScanScores.Sort(s, ScanSort.TotalValue);
+            Assert.Equal(new[] { 1, 2, 3, 0 }, s.ConvertAll(x => x.Order));
+            s = Slots();
+            ScanScores.Sort(s, ScanSort.Amount);
+            Assert.Equal(new[] { 2, 1, 0, 3 }, s.ConvertAll(x => x.Order));
+        }
+
+        [Fact]
+        public void KeepLeavesTheOrder()
+        {
+            var s = Slots();
+            ScanScores.Sort(s, ScanSort.Keep);
+            Assert.Equal(new[] { 0, 1, 2, 3 }, s.ConvertAll(x => x.Order));
+        }
     }
 }

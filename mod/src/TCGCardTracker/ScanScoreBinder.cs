@@ -39,7 +39,8 @@ namespace TCGCardTracker
         // TCG Studio
         private static FieldInfo? _entries, _stats, _statsMatching;
         private static FieldInfo? _eExp, _eDim, _ePer, _eFixed, _eOrder;
-        private static MethodInfo? _eSaveIndex, _eCopy, _shown;
+        private static MethodInfo? _eSaveIndex, _eCopy, _shown, _ePrice, _eCount;
+        private static FieldInfo? _query, _querySort;
         private static MethodInfo? _group, _refresh, _rebuildFilters;
         private static FieldInfo? _panelGraded;
 
@@ -52,6 +53,8 @@ namespace TCGCardTracker
         private static float _pendingThreshold, _appliedThreshold;
         /// <summary>Apply is committing a change of ours: the panel's Changed() must say so, or Apply only closes.</summary>
         private static bool _committing;
+        /// <summary>"Lowest score first" chip: in the open panel, and as last applied.</summary>
+        private static bool _pendingByScore, _appliedByScore;
 
         private static readonly Dictionary<long, List<CopyScore>> ByCard = new Dictionary<long, List<CopyScore>>();
         private static readonly Dictionary<long, int> Stored = new Dictionary<long, int>();
@@ -319,6 +322,10 @@ namespace TCGCardTracker
                 _eOrder = AccessTools.Field(entry, "Order");
                 _eSaveIndex = AccessTools.Method(entry, "SaveIndex");
                 _eCopy = AccessTools.Method(entry, "MemberwiseCopy");
+                _ePrice = AccessTools.Method(entry, "Price", new[] { typeof(int) });
+                _eCount = AccessTools.Method(entry, "Count", new[] { typeof(int) });
+                _query = AccessTools.Field(index, "Query");
+                _querySort = _query == null ? null : AccessTools.Field(_query.FieldType, "Sort");
                 _group = AccessTools.Method(panel, "Group");
                 _refresh = AccessTools.Method(panel, "Refresh");
                 _rebuildFilters = AccessTools.Method(panel, "RebuildFilters");
@@ -359,12 +366,15 @@ namespace TCGCardTracker
         {
             _pending = _applied;
             _pendingThreshold = _appliedThreshold;
+            _pendingByScore = _appliedByScore;
         }
 
         /// <summary>The panel's Reset clears its filters: ours too.</summary>
         private static void BeforeReset()
         {
-            if (!PanelGraded()) _pending = ScanFilter.Off;
+            if (PanelGraded()) return;
+            _pending = ScanFilter.Off;
+            _pendingByScore = false;
         }
 
         /// <summary>Apply with only our filter changed still rebuilds the binder.</summary>
@@ -374,7 +384,8 @@ namespace TCGCardTracker
         }
 
         private static bool PendingDiffers() =>
-            _pending != _applied || (_pending == ScanFilter.Below && _pendingThreshold != _appliedThreshold);
+            _pending != _applied || (_pending == ScanFilter.Below && _pendingThreshold != _appliedThreshold)
+            || (_pending != ScanFilter.Off && _pendingByScore != _appliedByScore);
 
         private static void BeforeApply()
         {
@@ -382,6 +393,7 @@ namespace TCGCardTracker
             _committing = PendingDiffers();
             _applied = _pending;
             _appliedThreshold = _pendingThreshold;
+            _appliedByScore = _pendingByScore;
         }
 
         private static void AfterApply() => _committing = false;
@@ -399,6 +411,11 @@ namespace TCGCardTracker
                     (ScanScores.BelowLabel(_pendingThreshold), () => _pending = ScanFilter.Below, () => _pending == ScanFilter.Below),
                     ("- 5%", () => Step(-ScanScores.ThresholdStep), () => false),
                     ("+ 5%", () => Step(ScanScores.ThresholdStep), () => false),
+                    ("Lowest score first", () =>
+                    {
+                        _pendingByScore = !_pendingByScore;
+                        if (_pendingByScore && _pending == ScanFilter.Off) _pending = ScanFilter.Scanned;
+                    }, () => _pendingByScore),
                 };
                 _group!.Invoke(null, new object[] { "Scan score", chips });
                 _refresh!.Invoke(null, null);
@@ -428,6 +445,7 @@ namespace TCGCardTracker
                 if (!(_entries!.GetValue(null) is IList entries)) return;
                 Read(true);
                 var kept = new List<object>();
+                var slots = new List<ScanSlot>();
                 var one = new object[1];
                 foreach (var e in entries)
                 {
@@ -440,17 +458,31 @@ namespace TCGCardTracker
                     {
                         one[0] = v;
                         int index = Convert.ToInt32(_eSaveIndex!.Invoke(e, one));
-                        if (!ScanScores.Passes(Remaining(Key(exp, dim, index)), _applied, _appliedThreshold)) continue;
+                        var remaining = Remaining(Key(exp, dim, index));
+                        if (!ScanScores.Passes(remaining, _applied, _appliedThreshold)) continue;
                         var copy = _eCopy!.Invoke(e, null);
                         _eFixed.SetValue(copy, v);
                         one[0] = copy;
                         if (Convert.ToInt32(_shown!.Invoke(null, one)) < 0) continue; // hidden by the panel's own version filters
-                        _eOrder!.SetValue(copy, kept.Count);
+                        one[0] = v;
+                        float price = _ePrice == null ? 0f : Convert.ToSingle(_ePrice.Invoke(e, one));
+                        int count = _eCount == null ? 0 : Convert.ToInt32(_eCount.Invoke(e, one));
+                        slots.Add(new ScanSlot(kept.Count, remaining.Count > 0 ? remaining[0].Lo : 101.0, price, count));
                         kept.Add(copy);
                     }
                 }
+                // TCG Studio sorted whole cards by their shown version; redo price/value/copies sorts per version.
+                string? binderSort = null;
+                var query = _query?.GetValue(null);
+                if (query != null && _querySort != null) binderSort = _querySort.GetValue(query)?.ToString();
+                ScanScores.Sort(slots, ScanScores.SortFor(binderSort, _appliedByScore));
                 entries.Clear();
-                foreach (var k in kept) entries.Add(k);
+                foreach (var slot in slots)
+                {
+                    var k = kept[slot.Order];
+                    _eOrder!.SetValue(k, entries.Count);
+                    entries.Add(k);
+                }
                 if (_stats != null && _statsMatching != null)
                 {
                     var stats = _stats.GetValue(null);

@@ -29,7 +29,8 @@ Press **F7** in your shop to open it.
   score left of the count, in CardGradeOverhaul's colours (`62%`, or a range like `58-66%` for a copy only
   looked at by hand, then `·3` when 3 copies are scanned). With TCG Studio's enhanced binder, its sort panel
   gets a **Scan score** filter: *Any score*, *Scanned*, or *Below 70%* (change the number with − / +), each
-  matching version in its own slot. It works in the card storage shelf picker too, so low-scoring cards are
+  matching version in its own slot. The panel's sort still applies (price, total value and copies are sorted
+  per version), or pick *Lowest score first*. It works in the card storage shelf picker too, so low-scoring cards are
   easy to put on a shelf to sell. Copies already on storage shelves count as the lowest-scoring ones, so they
   don't show again. Turn off with `[CardGradeOverhaul] ScoreBadges` / `ScoreFilter`; the threshold is
   `ScoreThreshold`.

@@ -32,6 +32,38 @@ namespace TCGCardTracker.Core
         public bool Exact => Hi - Lo < 0.05;
     }
 
+    /// <summary>How the scan-score filter orders the card versions it keeps (one slot each).</summary>
+    public enum ScanSort
+    {
+        /// <summary>TCG Studio's own order (set order, name, rarity, ...): a card's versions stay together.</summary>
+        Keep = 0,
+        /// <summary>Most valuable version first.</summary>
+        Price = 1,
+        /// <summary>Highest copies x price first.</summary>
+        TotalValue = 2,
+        /// <summary>Most copies first.</summary>
+        Amount = 3,
+        /// <summary>Lowest scan score first (then most valuable).</summary>
+        Score = 4,
+    }
+
+    /// <summary>One kept card version: its place in TCG Studio's list, its lowest remaining score, price and copies.</summary>
+    public readonly struct ScanSlot
+    {
+        public readonly int Order;
+        public readonly double Low;
+        public readonly float Price;
+        public readonly int Count;
+
+        public ScanSlot(int order, double low, float price, int count)
+        {
+            Order = order;
+            Low = low;
+            Price = float.IsNaN(price) ? 0f : price;
+            Count = count;
+        }
+    }
+
     /// <summary>The binder's scan-score badge and filter, worked out from one card version's scanned copies.</summary>
     public static class ScanScores
     {
@@ -88,6 +120,43 @@ namespace TCGCardTracker.Core
         /// <summary>CardGradeOverhaul's colour band for a score: 0 = 95+, 1 = 90+, 2 = 80+, 3 = 70+, 4 = lower.</summary>
         public static int Band(double percent) =>
             percent >= 95.0 ? 0 : percent >= 90.0 ? 1 : percent >= 80.0 ? 2 : percent >= 70.0 ? 3 : 4;
+
+        /// <summary>
+        /// The binder sort that applies to single versions. TCG Studio sorts whole cards by the version a slot shows, so
+        /// once a card is split into its versions, sorts by price, total value or copies are redone per version.
+        /// </summary>
+        public static ScanSort SortFor(string? binderSort, bool byScore)
+        {
+            if (byScore) return ScanSort.Score;
+            switch (binderSort)
+            {
+                case "Price": return ScanSort.Price;
+                case "TotalValue": return ScanSort.TotalValue;
+                case "Amount": return ScanSort.Amount;
+                default: return ScanSort.Keep;
+            }
+        }
+
+        /// <summary>Orders the kept versions (stable: ties keep TCG Studio's order).</summary>
+        public static void Sort(List<ScanSlot> slots, ScanSort sort)
+        {
+            if (sort == ScanSort.Keep) return;
+            slots.Sort((a, b) =>
+            {
+                int c = 0;
+                switch (sort)
+                {
+                    case ScanSort.Price: c = b.Price.CompareTo(a.Price); break;
+                    case ScanSort.TotalValue: c = (b.Price * b.Count).CompareTo(a.Price * a.Count); break;
+                    case ScanSort.Amount: c = b.Count.CompareTo(a.Count); break;
+                    case ScanSort.Score:
+                        c = a.Low.CompareTo(b.Low);
+                        if (c == 0) c = b.Price.CompareTo(a.Price);
+                        break;
+                }
+                return c != 0 ? c : a.Order.CompareTo(b.Order);
+            });
+        }
 
         /// <summary>The threshold kept on the 5% steps the - / + buttons use, within 5 - 100.</summary>
         public static float Clamp(float threshold)
