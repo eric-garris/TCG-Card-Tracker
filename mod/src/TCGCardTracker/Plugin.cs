@@ -21,7 +21,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.19.1";
+        public const string Version = "0.20.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -54,6 +54,9 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> QuickFillAllSetsDonations = null!;
         internal static ConfigEntry<bool> QuickFillAllSetsWorkbench = null!;
         internal static ConfigEntry<bool> GradingCustomSets = null!;
+        internal static ConfigEntry<bool> ScanScoreBadges = null!;
+        internal static ConfigEntry<bool> ScanScoreFilter = null!;
+        internal static ConfigEntry<float> ScanScoreThreshold = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -172,6 +175,18 @@ namespace TCGCardTracker
                 "With TCG Studio and the CardGradeOverhaul mod installed: list TCG Studio's sets on its grading page (cards to " +
                 "send and the set menu); on its own it only lists the base-game sets. This hooks CardGradeOverhaul's code; when " +
                 "it is off at startup, the hook is not installed at all.");
+            ScanScoreBadges = Config.Bind("CardGradeOverhaul", "ScoreBadges", true,
+                "With the CardGradeOverhaul mod installed: in the binder, show the condition score of a card's scanned copies " +
+                "left of its count, coloured like CardGradeOverhaul's scores: the lowest one (\"62%\", or a range like \"58-66%\" " +
+                "for a copy only looked at by hand), then \"\u00b73\" when 3 copies are scanned. Copies on card storage shelves " +
+                "are left out (taken to be the lowest-scoring ones). Takes effect after a restart.");
+            ScanScoreFilter = Config.Bind("CardGradeOverhaul", "ScoreFilter", true,
+                "With CardGradeOverhaul and TCG Studio's enhanced binder: add a \"Scan score\" filter to the binder's sort panel: " +
+                "Any score, Scanned (only cards with a scanned copy) or Below a threshold (only cards with a scanned copy whose " +
+                "whole score range is under it), each version in its own slot. Works in the card storage shelf picker too, to " +
+                "find low-scoring cards to sell. Takes effect after a restart.");
+            ScanScoreThreshold = Config.Bind("CardGradeOverhaul", "ScoreThreshold", 70f,
+                "The score (5 - 100) the binder's \"Below\" scan score filter uses. Also set with its - / + buttons in the binder.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
             TrackerWindow.CaptureStartupSettings();
@@ -195,6 +210,7 @@ namespace TCGCardTracker
             RestockOrder.Install();
             QuickFillAllSets.Install();
             GradingMod.Install();
+            ScanScoreBinder.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
