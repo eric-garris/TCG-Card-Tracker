@@ -108,33 +108,10 @@ Press **F7** in your shop to open it.
   shelf, the game normally picks a random card (every different card on the shelf has the same chance). With
   `[Employees] RestockHighestValue` on (default), they take the shelf's most valuable card first, by market price
   (graded cards at their graded price). Shelves you set so workers can't take from them stay untouched.
-- **TCG Studio pack and box art on game 1.03+:** the game's Unity 6 build draws all booster packs and boxes from
-  one stacked texture (a texture array), each pack picking its layer, and TCG Studio's art never reaches it, so custom
-  packs and boxes looked vanilla. The tracker gives each custom pack and box its own one-layer array of TCG Studio's art,
-  on the shelf, in hand, in bags and boxes and while opening; box art is also moved from TCG Studio's old box layout to
-  the 1.03 box's. TCG Studio's accessories (sleeves, playmats, comics, collection books, figurines and the rest) get
-  the same treatment: each one whose base item draws from a texture array gets its own one-layer array of its texture.
-  **This is a temporary workaround** for TCG Studio 1.14.0 and earlier on game 1.03: when a TCG Studio
-  update supports the new game version, turn it off with `[TCG Studio] FixPackSkins` (or in the F7 Settings tab) and,
-  if TCG Studio's own art then shows correctly, it can be removed from the tracker.
-- **TCG Studio label icons on game 1.03+:** since 1.03 the labels on shelves and delivery boxes draw their item icon
-  from one prebaked icon atlas, which only knows vanilla items, so TCG Studio's packs and boxes showed no icon. The
-  tracker paints each custom item's icon into a free cell of a copy of that atlas; if the atlas runs out of free
-  cells, a box shows its set's pack icon (also under `FixPackSkins`, same temporary workaround).
-- **Day clock with TCG Studio on game 1.03+:** TCG Studio 1.14.0's shop sign code crashes on the game's Unity 6
-  build, and because it runs while the shop's lighting and clock object starts up, the game switched that object off:
-  no clock, and the day never ends. The tracker catches that error (noted once in the BepInEx log), so the clock runs;
-  the shop sign stays vanilla. **This is a temporary workaround** until TCG Studio supports game 1.03.
-- **TCG Studio packs with more than 7 cards on game 1.03+:** 1.03 keeps one size per card slot for vanilla's 7
-  slots only, so opening a bigger TCG Studio pack (imported Yu-Gi-Oh and Pokemon sets have 9 or more cards) hit an
-  error on every frame and the opening screen froze. The tracker gives the extra slots a size too, so these packs
-  open normally. **This is a temporary workaround** until TCG Studio supports game 1.03.
-- **Workbench bulk boxes vanishing on reload (TCG Studio on game 1.03+):** on every load TCG Studio clears out items
-  it thinks belong to a removed custom set, and it judges that by the item list of the game it was built for (before
-  1.03). Items added after that (such as the workbench's bulk boxes, new in 1.03) looked like leftovers, so they
-  were deleted from shelves along with the shelf's price tag. The tracker marks the game's own items as installed
-  while that cleanup runs, so they stay. Boxes already lost can't come back. **This is a temporary
-  workaround** until TCG Studio supports game 1.03.
+- **TCG Studio on game 1.03+:** use TCG Studio 2.0 or newer, which supports the game's Unity 6 build itself
+  (pack, box and accessory art, label icons, shop sign, packs with more than 7 cards, workbench bulk boxes). The
+  tracker's temporary fixes for those (`[TCG Studio] FixPackSkins` and four automatic guards, added for TCG Studio
+  1.14.0) were removed in tracker 0.21.0. An old `FixPackSkins` line left in the config file does nothing.
 - It reads the game's own card list, names and editions, so it stays correct across game updates.
 - It never changes your save or your cards. The new-card popup and the trade banners hook the game's
   code (pack opening, collecting from pack openers and the trade screen) and only read; with `NewCardPopup` or `TradeBanners` off
@@ -142,8 +119,7 @@ Press **F7** in your shop to open it.
   one thing it changes is which set a trading customer's card, and the card they ask for, comes
   from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
   custom sets to that mod's card list and, once per new rarity name, to its rarity settings. With TCG Marketplace
-  installed, it changes how fast that mod's listings sell. With "All sets" on, quick fill and the workbench pick cards from every set. With TCG Studio installed, it changes which picture its
-  custom packs, boxes and accessories draw, and their label icons (`FixPackSkins`).
+  installed, it changes how fast that mod's listings sell. With "All sets" on, quick fill and the workbench pick cards from every set.
 
 ## Install
 
@@ -160,7 +136,7 @@ Most settings can be changed in game on the tracker's **Settings** tab (press F7
 Hover a setting to see what it does; changes are saved straight away. A setting that shows `*` after you change it needs a
 game restart. They are all also in `<game>\BepInEx\config\tcgcardtracker.collection.cfg`. You can change the hotkey,
 window size (`UiScale`), copy counts, card pictures (`CardPictures`), the new-card popup
-(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio pack art (`FixPackSkins`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), TCG Marketplace sale speed (`FasterSales`, `CustomerSeconds`, `CardsPerCustomer`, `RecheckSeconds`, `SaleChance`), employee restocking order (`RestockHighestValue`), the quick fill "All sets" button (`AllSetsButton`), which places are counted, and
+(`NewCardPopup`), the trade banners (`TradeBanners`), TCG Studio cards in trades (`CustomTradeChance`, `CustomRequestChance`), TCG Studio sets in Point And Slots (`CustomSets`, `AddRarities`), random reward versions (`RandomVersions`), points across saves (`KeepPointsOnSave`), points for packs (`PackPoints`), TCG Marketplace sale speed (`FasterSales`, `CustomerSeconds`, `CardsPerCustomer`, `RecheckSeconds`, `SaleChance`), employee restocking order (`RestockHighestValue`), the quick fill "All sets" button (`AllSetsButton`), which places are counted, and
 `LiveShelves` there.
 `LiveShelves` re-reads displays and storage from the shop each time the panel opens or refreshes.
 When it is off, the mod uses the shelf contents from your last save.

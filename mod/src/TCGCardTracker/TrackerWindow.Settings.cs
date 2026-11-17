@@ -81,10 +81,6 @@ namespace TCGCardTracker
                     new Setting(Plugin.QuickFillAllSetsDonations, "All sets: donation bins"),
                     new Setting(Plugin.QuickFillAllSetsWorkbench, "All sets: workbench"),
                 }),
-                ("TCG Studio", new[]
-                {
-                    new Setting(Plugin.FixPackSkins, "Fix pack, box and accessory art", startup: true),
-                }),
                 ("Point And Slots", new[]
                 {
                     new Setting(Plugin.PointAndSlotsSets, "TCG Studio sets", startup: true),
