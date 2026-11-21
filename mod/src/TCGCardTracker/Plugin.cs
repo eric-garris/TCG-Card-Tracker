@@ -21,7 +21,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.21.0";
+        public const string Version = "0.21.1";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;

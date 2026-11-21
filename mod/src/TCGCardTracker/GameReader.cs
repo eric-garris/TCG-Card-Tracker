@@ -134,11 +134,13 @@ namespace TCGCardTracker
         /// <summary>Sets added by a card-set mod, found through the game lookups it patches. None without such a mod.</summary>
         private static IEnumerable<SetDef> CustomSets()
         {
+            CustomTiers.Clear();
             var editions = new string[6];
             for (int b = 0; b < editions.Length; b++)
                 editions[b] = BorderName(0, b, false) ?? StandardEditions[b];
             foreach (var (e, shown) in CustomShownLists())
             {
+                LearnTiers(shown);
                 yield return new SetDef
                 {
                     Key = "custom" + e,
@@ -273,8 +275,63 @@ namespace TCGCardTracker
             return ((EMonsterType)id).ToString();
         }
 
+        /// <summary>Tier of each custom card whose rarity isn't a vanilla value (see <see cref="RarityTiers"/>).</summary>
+        private static readonly Dictionary<int, Tier> CustomTiers = new Dictionary<int, Tier>();
+
+        private static void LearnTiers(int[] shown)
+        {
+            var raw = new Dictionary<int, int>();
+            foreach (int id in shown)
+            {
+                try
+                {
+                    var data = InventoryBase.GetMonsterData((EMonsterType)id);
+                    if (data != null) raw[id] = (int)data.Rarity;
+                }
+                catch
+                {
+                    // Left out: counts as Common.
+                }
+            }
+            var tiers = RarityTiers.ForSet(raw.Values);
+            foreach (var kv in raw)
+            {
+                if (kv.Value >= 0 && kv.Value <= 3) continue;
+                CustomTiers[kv.Key] = StudioTier(kv.Key) ?? tiers[kv.Value];
+            }
+        }
+
+        private static MethodInfo? _studioRarityOf;
+        private static FieldInfo? _studioTierField;
+        private static bool _studioLooked;
+
+        /// <summary>TCG Studio's own vanilla tier for a card's rarity (RarityDef.Tier), when TCG Studio is installed; else null.</summary>
+        private static Tier? StudioTier(int id)
+        {
+            try
+            {
+                if (!_studioLooked)
+                {
+                    _studioLooked = true;
+                    var registry = HarmonyLib.AccessTools.TypeByName("TCGCustomCards.Runtime.Registry");
+                    _studioRarityOf = registry == null ? null : HarmonyLib.AccessTools.Method(registry, "RarityOf", new[] { typeof(EMonsterType) });
+                    _studioTierField = _studioRarityOf == null ? null : HarmonyLib.AccessTools.Field(_studioRarityOf.ReturnType, "Tier");
+                }
+                if (_studioRarityOf == null || _studioTierField == null) return null;
+                var def = _studioRarityOf.Invoke(null, new object[] { (EMonsterType)id });
+                if (def == null) return null;
+                int t = Convert.ToInt32(_studioTierField.GetValue(def));
+                return t >= 0 && t <= 3 ? (Tier)t : (Tier?)null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private static Tier MonsterTier(int id)
         {
+            if (CustomTiers.TryGetValue(id, out var custom)) return custom;
             try
             {
                 var data = InventoryBase.GetMonsterData((EMonsterType)id);
