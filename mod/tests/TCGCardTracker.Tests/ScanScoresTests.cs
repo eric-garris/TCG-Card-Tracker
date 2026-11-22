@@ -82,7 +82,8 @@ namespace TCGCardTracker.Tests
         {
             Assert.Equal(5f, ScanScores.Clamp(0f));
             Assert.Equal(100f, ScanScores.Clamp(150f));
-            Assert.Equal(70f, ScanScores.Clamp(float.NaN));
+            Assert.Equal(92f, ScanScores.Clamp(float.NaN));
+            Assert.Equal("Below 92%", ScanScores.BelowLabel(92f));
             Assert.Equal("Below 65%", ScanScores.BelowLabel(65f));
         }
     
