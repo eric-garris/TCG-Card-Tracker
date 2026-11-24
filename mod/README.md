@@ -108,6 +108,19 @@ Press **F7** in your shop to open it.
   shelf, the game normally picks a random card (every different card on the shelf has the same chance). With
   `[Employees] RestockHighestValue` on (default), they take the shelf's most valuable card first, by market price
   (graded cards at their graded price). Shelves you set so workers can't take from them stay untouched.
+- **Duel ladders and Prize Vault:** every game you play at a play table counts on a rated ladder, one for
+  vanilla Tetramon and one for Magic (TCG Studio). Ratings start at 1,000 and work like chess Elo: wins raise it,
+  losses lower it, and quitting a game (the quit screen, or standing up mid-game in Magic) counts as a loss. Every
+  50 rating is a rank (1 - 50). A win puts `PrizeGrowth^(rank - 1)` packs in the Prize Vault (1.17 by default: 1 pack
+  at rank 1, about 2,200 packs or 15,000 cards at rank 50), a draw half that, a loss nothing; finishing a tournament
+  adds 5 wins' worth for 1st, 3 for 2nd, 2 for 3rd and 1 otherwise. Packs come from the sets you have a pack license
+  for. Open them from F7 > Prizes ("Open all", or one kind): they are rolled with the game's own pack odds (editions,
+  foils, TCG Studio packs) with no opening screen and go straight into your binder, with one summary popup. They earn
+  no Point And Slots pack points. With `[Duel Ladder] MatchDifficulty` on, opponents get harder as you climb: Magic
+  customers' deck power follows your Magic rank (weak at 1, strong at 50) instead of TCG Studio's `AiDeckPower`, and
+  in Tetramon you are dealt the premade decks you beat most often at low ranks and least often at high ranks. The
+  ladders and vault are saved when the game saves, per save slot, in `BepInEx/config/tcgcardtracker.ladder/`. Turn it
+  all off with `[Duel Ladder] Enabled`.
 - **TCG Studio on game 1.03+:** use TCG Studio 2.0 or newer, which supports the game's Unity 6 build itself
   (pack, box and accessory art, label icons, shop sign, packs with more than 7 cards, workbench bulk boxes). The
   tracker's temporary fixes for those (`[TCG Studio] FixPackSkins` and four automatic guards, added for TCG Studio
@@ -120,6 +133,7 @@ Press **F7** in your shop to open it.
   from, and only with TCG Studio installed and `CustomTradeChance` or `CustomRequestChance` above 0. With Point And Slots installed, it also adds your
   custom sets to that mod's card list and, once per new rarity name, to its rarity settings. With TCG Marketplace
   installed, it changes how fast that mod's listings sell. With "All sets" on, quick fill and the workbench pick cards from every set.
+  The duel ladder adds cards when you open Prize Vault packs and, with `MatchDifficulty` on, picks your opponent's deck.
 
 ## Install
 

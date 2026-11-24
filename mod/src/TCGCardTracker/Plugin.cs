@@ -21,7 +21,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.21.2";
+        public const string Version = "0.22.0";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -56,6 +56,11 @@ namespace TCGCardTracker
         internal static ConfigEntry<bool> ScanScoreBadges = null!;
         internal static ConfigEntry<bool> ScanScoreFilter = null!;
         internal static ConfigEntry<float> ScanScoreThreshold = null!;
+        internal static ConfigEntry<bool> LadderEnabled = null!;
+        internal static ConfigEntry<bool> LadderDifficulty = null!;
+        internal static ConfigEntry<float> LadderPrizeGrowth = null!;
+        internal static ConfigEntry<float> LadderPrizeScale = null!;
+        internal static ConfigEntry<float> LadderPacksPerFrame = null!;
         internal static readonly ConfigEntry<bool>[] CountIn = new ConfigEntry<bool>[Collection.LocCount];
 
         private static readonly HashSet<string> Logged = new HashSet<string>();
@@ -178,6 +183,22 @@ namespace TCGCardTracker
                 "find low-scoring cards to sell. Takes effect after a restart.");
             ScanScoreThreshold = Config.Bind("CardGradeOverhaul", "ScoreThreshold", 92f,
                 "The score (5 - 100) the binder's \"Below\" scan score filter uses. Also set with its - / + buttons in the binder (1% or 5% steps).");
+            LadderEnabled = Config.Bind("Duel Ladder", "Enabled", true,
+                "Games you play at a play table (vanilla Tetramon, and Magic with TCG Studio) count on a rated ladder, one for " +
+                "each game. Wins raise your rating, losses lower it (quitting a game is a loss), every 50 rating is a rank (1 - 50), " +
+                "and wins and tournament placings put packs in the Prize Vault (F7 > Prizes), more the higher your rank. Saved with " +
+                "your game per save slot. This hooks the play table; when it is off at startup, the hook is not installed at all.");
+            LadderDifficulty = Config.Bind("Duel Ladder", "MatchDifficulty", true,
+                "Opponents get harder as your rank rises. Magic: TCG Studio's customer deck power follows your Magic rank (weak at " +
+                "rank 1, strong at 50) instead of its own AiDeckPower setting. Tetramon: you are dealt the premade decks you beat " +
+                "most often at low ranks and the ones you beat least often at high ranks. Off: the games pick opponents as usual.");
+            LadderPrizeGrowth = Config.Bind("Duel Ladder", "PrizeGrowth", 1.17f,
+                "How much a win's prize grows per rank (1 - 1.5). A win pays PrizeGrowth^(rank - 1) packs: at 1.17, 1 pack at " +
+                "rank 1, 20 at rank 20 and about 2,200 (some 15,000 cards) at rank 50. A draw pays half, a loss nothing.");
+            LadderPrizeScale = Config.Bind("Duel Ladder", "PrizeScale", 1f,
+                "Multiplies every prize (0.1 - 10). 1 = as described under PrizeGrowth.");
+            LadderPacksPerFrame = Config.Bind("Duel Ladder", "PacksPerFrame", 50f,
+                "How many Prize Vault packs are rolled each frame while opening (1 - 1000). Lower if opening stutters, higher to open faster.");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
             TrackerWindow.CaptureStartupSettings();
@@ -197,6 +218,7 @@ namespace TCGCardTracker
             QuickFillAllSets.Install();
             GradingMod.Install();
             ScanScoreBinder.Install();
+            DuelLadder.Install();
 
             Log.LogInfo($"{Name} {Version} loaded. Press {ToggleKey.Value} in your shop to open it.");
         }
@@ -206,6 +228,7 @@ namespace TCGCardTracker
             Runner.Window.ForceClose();
             PackWatcher.Reset();
             TradeBanner.Reset();
+            PrizeVault.Cancel();
             Runner.Spawn();
             Runner.AttachToGameHost();
         }
@@ -285,6 +308,7 @@ namespace TCGCardTracker
                 TradeBanner.Tick();
                 PointAndSlots.Tick();
                 Marketplace.Tick();
+                PrizeVault.Tick();
             }
             catch (System.Exception e)
             {

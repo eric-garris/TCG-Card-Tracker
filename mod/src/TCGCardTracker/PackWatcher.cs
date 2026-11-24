@@ -84,7 +84,8 @@ namespace TCGCardTracker
             try
             {
                 // A multi-pack rolls several times on one screen: keep the snapshot from the first.
-                if (_before != null || !Plugin.NewCardPopup.Value || !GameReader.IsReady()) return;
+                // Prize Vault packs are rolled without a screen and get their own summary.
+                if (_before != null || PrizeVault.Opening || !Plugin.NewCardPopup.Value || !GameReader.IsReady()) return;
                 _before = Snapshot(out _);
                 _sequence = __instance;
                 _rolledAt = Time.realtimeSinceStartup;
@@ -179,6 +180,12 @@ namespace TCGCardTracker
             }
         }
 
+        /// <summary>The catalog the last Snapshot used (null before the first).</summary>
+        internal static Catalog? Catalog => _catalog;
+
+        /// <summary>What you own now, by the catalog the last Snapshot used.</summary>
+        internal static int[] OwnedNow() => Owned(_catalog!);
+
         private static int[] Owned(Catalog catalog, Loc? without = null)
         {
             var included = Plugin.IncludedLocations();
@@ -251,7 +258,7 @@ namespace TCGCardTracker
             _until = Time.realtimeSinceStartup + _duration;
         }
 
-        private static string Line(Gain g)
+        internal static string Line(Gain g)
         {
             string text = $"{g.Card.RarityLabel}  ({g.Card.Set.Name})";
             if (!g.IsNew) text += $"  now {new Column(g.BestCol).LongLabel}";

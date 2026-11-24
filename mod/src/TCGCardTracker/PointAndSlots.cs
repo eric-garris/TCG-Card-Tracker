@@ -227,7 +227,7 @@ namespace TCGCardTracker
 
         private static void AfterPackRoll(bool isSecondaryRolledData)
         {
-            if (isSecondaryRolledData) return;
+            if (isSecondaryRolledData || PrizeVault.Opening) return; // Prize Vault packs earn no pack points.
             _unpaidPacks++;
             _lastRollAt = Time.realtimeSinceStartup;
         }
@@ -560,7 +560,7 @@ namespace TCGCardTracker
             return copy;
         }
 
-        private static CardData Copy(CardData card) => new CardData
+        internal static CardData Copy(CardData card) => new CardData
         {
             expansionType = card.expansionType,
             monsterType = card.monsterType,
