@@ -410,6 +410,8 @@ namespace TCGCardTracker
                     ("Scanned", () => _pending = ScanFilter.Scanned, () => _pending == ScanFilter.Scanned),
                     (ScanScores.BelowLabel(_pendingThreshold), () => _pending = ScanFilter.Below, () => _pending == ScanFilter.Below),
                     ("- 5%", () => Step(-ScanScores.ThresholdStep), () => false),
+                    ("- 1%", () => Step(-ScanScores.FineStep), () => false),
+                    ("+ 1%", () => Step(ScanScores.FineStep), () => false),
                     ("+ 5%", () => Step(ScanScores.ThresholdStep), () => false),
                     ("Lowest score first", () =>
                     {

@@ -67,7 +67,7 @@ namespace TCGCardTracker.Core
     /// <summary>The binder's scan-score badge and filter, worked out from one card version's scanned copies.</summary>
     public static class ScanScores
     {
-        public const float MinThreshold = 5f, MaxThreshold = 100f, ThresholdStep = 5f;
+        public const float MinThreshold = 5f, MaxThreshold = 100f, ThresholdStep = 5f, FineStep = 1f, DefaultThreshold = 92f;
 
         private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -158,14 +158,14 @@ namespace TCGCardTracker.Core
             });
         }
 
-        /// <summary>The threshold kept on the 5% steps the - / + buttons use, within 5 - 100.</summary>
+        /// <summary>The threshold kept within 5 - 100 (the binder steps it by 1% or 5%).</summary>
         public static float Clamp(float threshold)
         {
-            if (float.IsNaN(threshold)) return 70f;
+            if (float.IsNaN(threshold)) return DefaultThreshold;
             return Math.Max(MinThreshold, Math.Min(MaxThreshold, threshold));
         }
 
-        /// <summary>Label of the filter's threshold chip, e.g. "Below 70%".</summary>
+        /// <summary>Label of the filter's threshold chip, e.g. "Below 92%".</summary>
         public static string BelowLabel(float threshold) => "Below " + Clamp(threshold).ToString("0.#", Inv) + "%";
     }
 }

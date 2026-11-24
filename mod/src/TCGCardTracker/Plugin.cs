@@ -21,7 +21,7 @@ namespace TCGCardTracker
     {
         public const string Guid = "tcgcardtracker.collection";
         public const string Name = "TCG Card Tracker";
-        public const string Version = "0.21.1";
+        public const string Version = "0.21.2";
 
         internal static ManualLogSource Log = null!;
         internal static ConfigEntry<KeyboardShortcut> ToggleKey = null!;
@@ -176,8 +176,8 @@ namespace TCGCardTracker
                 "Any score, Scanned (only cards with a scanned copy) or Below a threshold (only cards with a scanned copy whose " +
                 "whole score range is under it), each version in its own slot. Works in the card storage shelf picker too, to " +
                 "find low-scoring cards to sell. Takes effect after a restart.");
-            ScanScoreThreshold = Config.Bind("CardGradeOverhaul", "ScoreThreshold", 70f,
-                "The score (5 - 100) the binder's \"Below\" scan score filter uses. Also set with its - / + buttons in the binder.");
+            ScanScoreThreshold = Config.Bind("CardGradeOverhaul", "ScoreThreshold", 92f,
+                "The score (5 - 100) the binder's \"Below\" scan score filter uses. Also set with its - / + buttons in the binder (1% or 5% steps).");
             foreach (var l in Locations)
                 CountIn[(int)l.loc] = Config.Bind("Counting", l.key, true, "Count cards in: " + l.hint);
             TrackerWindow.CaptureStartupSettings();
