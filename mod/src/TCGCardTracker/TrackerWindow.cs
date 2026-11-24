@@ -454,6 +454,7 @@ namespace TCGCardTracker
             if (GUILayout.Toggle(_tab == 0, "Overview", Styles.Tab, GUILayout.Width(110))) _tab = 0;
             if (GUILayout.Toggle(_tab == 1, "Card list", Styles.Tab, GUILayout.Width(110))) _tab = 1;
             if (GUILayout.Toggle(_tab == 2, "Settings", Styles.Tab, GUILayout.Width(110))) _tab = 2;
+            if (Plugin.LadderEnabled.Value && GUILayout.Toggle(_tab == 3, "Prizes", Styles.Tab, GUILayout.Width(110))) _tab = 3;
             if (_tab != 2) _rebinding = false;
             GUILayout.FlexibleSpace();
             if (_collection != null)
@@ -469,6 +470,13 @@ namespace TCGCardTracker
             if (_tab == 2)
             {
                 DrawSettings();
+                GUI.DragWindow(new Rect(0, 0, 10000, 22));
+                return;
+            }
+
+            if (_tab == 3)
+            {
+                DrawPrizes();
                 GUI.DragWindow(new Rect(0, 0, 10000, 22));
                 return;
             }

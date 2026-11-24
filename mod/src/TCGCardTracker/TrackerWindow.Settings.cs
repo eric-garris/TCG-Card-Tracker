@@ -97,6 +97,14 @@ namespace TCGCardTracker
                     new Setting(Plugin.ScanScoreFilter, "Scan score filter in binder", startup: true),
                     new Setting(Plugin.ScanScoreThreshold, "\"Below\" filter score (%)", min: 5f, max: 100f, step: 5f),
                 }),
+                ("Duel ladder", new[]
+                {
+                    new Setting(Plugin.LadderEnabled, "Duel ladder and Prize Vault", startup: true),
+                    new Setting(Plugin.LadderDifficulty, "Harder opponents as you climb"),
+                    new Setting(Plugin.LadderPrizeGrowth, "Prize growth per rank", min: 1f, max: 1.5f, step: 0.01f),
+                    new Setting(Plugin.LadderPrizeScale, "Prize multiplier", min: 0.1f, max: 10f, step: 0.1f),
+                    new Setting(Plugin.LadderPacksPerFrame, "Vault packs opened per frame", min: 1f, max: 1000f, step: 10f),
+                }),
                 ("TCG Marketplace", new[]
                 {
                     new Setting(Plugin.MarketFasterSales, "Faster sales", startup: true),
