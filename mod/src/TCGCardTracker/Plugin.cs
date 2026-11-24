@@ -181,8 +181,8 @@ namespace TCGCardTracker
                 "Any score, Scanned (only cards with a scanned copy) or Below a threshold (only cards with a scanned copy whose " +
                 "whole score range is under it), each version in its own slot. Works in the card storage shelf picker too, to " +
                 "find low-scoring cards to sell. Takes effect after a restart.");
-            ScanScoreThreshold = Config.Bind("CardGradeOverhaul", "ScoreThreshold", 70f,
-                "The score (5 - 100) the binder's \"Below\" scan score filter uses. Also set with its - / + buttons in the binder.");
+            ScanScoreThreshold = Config.Bind("CardGradeOverhaul", "ScoreThreshold", 92f,
+                "The score (5 - 100) the binder's \"Below\" scan score filter uses. Also set with its - / + buttons in the binder (1% or 5% steps).");
             LadderEnabled = Config.Bind("Duel Ladder", "Enabled", true,
                 "Games you play at a play table (vanilla Tetramon, and Magic with TCG Studio) count on a rated ladder, one for " +
                 "each game. Wins raise your rating, losses lower it (quitting a game is a loss), every 50 rating is a rank (1 - 50), " +
